@@ -723,7 +723,7 @@ local function isAcceptedState()
 			:WaitForChild("ReadyButton")
 			:WaitForChild("Txt").Text
 	end)
-	return ok and txt == "ACCEPTED"
+	return ok and txt == "ACCEPT"
 end
 
 local function updateGreenStyleVisibility()
