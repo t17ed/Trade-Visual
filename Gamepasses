@@ -838,44 +838,39 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
---////////////////////////////////////////////////////////////
--- NEW ADDITION: ACCEPTED FILTER VISIBILITY SYSTEM (ADDED ONLY)
---////////////////////////////////////////////////////////////
+-- =========================================================
+-- NEW FEATURE: GREEN BUTTON VISIBILITY FILTER (ADDED ONLY)
+-- =========================================================
 
 local function isGreenStyle(panel)
 	if not panel then return false end
-
-	local spacer = panel:FindFirstChild("Spacer")
-	if not spacer then return false end
-
-	local clicked = panel:GetAttribute("Clicked")
-	if clicked then
+	if panel:GetAttribute("Clicked") == true then
 		return true
 	end
 
-	local bg = spacer.BackgroundColor3
-	return (bg == clickedColor)
+	local spacer = panel:FindFirstChild("Spacer")
+	if spacer and spacer.BackgroundColor3 == clickedColor then
+		return true
+	end
+
+	return false
 end
 
-local function updateAcceptedVisibility()
+local function updateGreenVisibility()
 	local other = tradeUI:FindFirstChild("Other")
 	if not other then return end
-
-	local readyButtonLocal = other:FindFirstChild("ReadyButton")
-	if not readyButtonLocal then return end
-
-	local txt = readyButtonLocal:FindFirstChild("Txt")
+	local readyButton = other:FindFirstChild("ReadyButton")
+	if not readyButton then return end
+	local txt = readyButton:FindFirstChild("Txt")
 	if not txt then return end
 
-	if txt.Text == "ACCEPTED" then
-		for _, panel in ipairs(adminPanels) do
-			if panel then
+	local accepted = (txt.Text == "ACCEPTED")
+
+	for _, panel in ipairs(adminPanels) do
+		if panel then
+			if accepted then
 				panel.Visible = isGreenStyle(panel)
-			end
-		end
-	else
-		for _, panel in ipairs(adminPanels) do
-			if panel then
+			else
 				panel.Visible = true
 			end
 		end
@@ -884,29 +879,19 @@ end
 
 task.spawn(function()
 	while true do
-		pcall(updateAcceptedVisibility)
-		task.wait(0.2)
+		pcall(updateGreenVisibility)
+		task.wait(0.15)
 	end
 end)
 
-local function hookAcceptedText()
-	local other = tradeUI:FindFirstChild("Other")
-	if not other then return end
-
-	local readyButtonLocal = other:FindFirstChild("ReadyButton")
-	if not readyButtonLocal then return end
-
-	local txt = readyButtonLocal:FindFirstChild("Txt")
-	if not txt then return end
+local function hookAcceptedWatcher()
+	local other = tradeUI:WaitForChild("Other")
+	local readyButton = other:WaitForChild("ReadyButton")
+	local txt = readyButton:WaitForChild("Txt")
 
 	txt:GetPropertyChangedSignal("Text"):Connect(function()
-		pcall(updateAcceptedVisibility)
+		updateGreenVisibility()
 	end)
 end
 
-task.spawn(function()
-	while true do
-		hookAcceptedText()
-		task.wait(1)
-	end
-end)
+task.spawn(hookAcceptedWatcher)
