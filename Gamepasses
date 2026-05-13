@@ -35,53 +35,24 @@ local notificationUI = notificationRoot:WaitForChild("Notification")
 
 local notifTemplate = notificationUI:WaitForChild("Template")
 
--- COLORS
-local defaultColor = Color3.fromRGB(35,45,50)
-local clickedColor = Color3.fromRGB(15,50,15)
-local holdColor = Color3.fromRGB(81,103,81)
-local strokeClickedColor = Color3.fromRGB(15,255,15)
+-- COLORS (NEON UPGRADE)
+local defaultColor = Color3.fromRGB(30, 18, 35)
+local clickedColor = Color3.fromRGB(255, 0, 170)
+local holdColor = Color3.fromRGB(120, 0, 90)
+local strokeClickedColor = Color3.fromRGB(180, 0, 255)
 
 -- STATE
 local adminPanels = {}
 local pendingPanel = nil
 local autoAccept = false
-local scriptEnabled = true
-
--- NEW STATE (ADDED)
-local acceptMode = false
 
 -- PRESETS
 local presets = {
-	{
-		Name = "Admin",
-		Image = "rbxassetid://139291316302932",
-		Cash = "9,999",
-		Title = "[🎁] Admin Panel"
-	},
-	{
-		Name = "VIP",
-		Image = "rbxassetid://89326624889199",
-		Cash = "499",
-		Title = "[🎁] VIP"
-	},
-	{
-		Name = "Hammer",
-		Image = "rbxassetid://113735454516185",
-		Cash = "1,499",
-		Title = "[🎁] Ban Hammer"
-	},
-	{
-		Name = "Laser",
-		Image = "rbxassetid://127461267233201",
-		Cash = "749",
-		Title = "[🎁] Laser Gun"
-	},
-	{
-		Name = "Money",
-		Image = "rbxassetid://93863319650684",
-		Cash = "299",
-		Title = "[🎁] 2x Money"
-	},
+	{Name="Admin", Image="rbxassetid://139291316302932", Cash="9,999", Title="[🎁] Admin Panel"},
+	{Name="VIP", Image="rbxassetid://89326624889199", Cash="499", Title="[🎁] VIP"},
+	{Name="Hammer", Image="rbxassetid://113735454516185", Cash="1,499", Title="[🎁] Ban Hammer"},
+	{Name="Laser", Image="rbxassetid://127461267233201", Cash="749", Title="[🎁] Laser Gun"},
+	{Name="Money", Image="rbxassetid://93863319650684", Cash="299", Title="[🎁] 2x Money"},
 }
 
 -- SOUNDS
@@ -100,149 +71,71 @@ failSound.SoundId = "rbxassetid://126210834885859"
 failSound.Volume = 0.5
 failSound.Parent = warningTemplate
 
--- DESCRIPTION
 description.Text =
-	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
+"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
----------------------------------------------------------------------
--- SETTINGS TEXT PATCH (UNCHANGED CORE, ONLY ENHANCED VISUAL LOOP)
----------------------------------------------------------------------
-task.spawn(function()
-	while true do
-		pcall(function()
-			local functionText =
-				playerGui
-				:WaitForChild("Settings")
-				:WaitForChild("Settings")
-				:WaitForChild("Content")
-				:WaitForChild("ScrollingFrame")
-				:WaitForChild("VFX")
-				:WaitForChild("Function")
-
-			functionText.Text = "Gamepass Trading"
-			functionText.TextColor3 = Color3.fromRGB(255, 80, 255)
-		end)
-		task.wait(1)
-	end
-end)
-
----------------------------------------------------------------------
--- HIDE SELECTIONS
----------------------------------------------------------------------
-local function hideSelections()
-	for _,v in ipairs(scrollingFrame:GetChildren()) do
-		if v.Name:find("Selection") then
-			if v:IsA("GuiObject") then
-				v.Visible = false
-			end
-		end
-	end
+-- ACCEPT TEXT CHECK
+local function isAcceptState()
+	local ok, res = pcall(function()
+		local txt = tradeUI:WaitForChild("Other"):WaitForChild("ReadyButton"):WaitForChild("Txt")
+		return txt.Text == "ACCEPT"
+	end)
+	return ok and res
 end
 
-scrollingFrame.ChildAdded:Connect(function()
-	task.wait()
-	hideSelections()
-end)
-
-task.spawn(function()
-	while true do
-		hideSelections()
-		task.wait(0.05)
-	end
-end)
-
----------------------------------------------------------------------
--- NOTIFICATION (PATCH LAYER ADDED BELOW)
----------------------------------------------------------------------
+-- NOTIFICATION
 local function showNotification(text,color)
 	local clone = notifTemplate:Clone()
 	clone.Parent = notificationUI
 	clone.Visible = true
 
-	local txt = nil
-
-	if clone:IsA("TextLabel") then
-		txt = clone
-	else
-		txt = clone:FindFirstChild("Text",true)
-	end
+	local txt = clone:IsA("TextLabel") and clone or clone:FindFirstChild("Text", true)
 
 	if txt then
 		txt.RichText = true
 		txt.Text = text
 		txt.TextColor3 = color
+		txt.Font = Enum.Font.GothamBlack
 	end
 
-	task.delay(5,function()
-		if clone then
-			clone:Destroy()
-		end
+	task.delay(5, function()
+		clone:Destroy()
 	end)
 end
 
----------------------------------------------------------------------
--- RESET COLORS
----------------------------------------------------------------------
+-- RESET
 local function resetPanels()
 	for _,panel in ipairs(adminPanels) do
 		if panel and panel.Parent then
 			local spacer = panel:FindFirstChild("Spacer")
-
 			if spacer then
 				spacer.BackgroundColor3 = defaultColor
-
 				local stroke = spacer:FindFirstChildOfClass("UIStroke")
 				if stroke then
 					stroke.Color = Color3.fromRGB(0,0,0)
 				end
-
 				panel:SetAttribute("Clicked",false)
 			end
 		end
 	end
 end
 
----------------------------------------------------------------------
--- ACCEPT CHECK (ADDED MODE FLAG)
----------------------------------------------------------------------
-local function connectAcceptWatcher()
-	local other = tradeUI:WaitForChild("Other")
-	local readyButton = other:WaitForChild("ReadyButton")
-	local txt = readyButton:WaitForChild("Txt")
-
-	txt:GetPropertyChangedSignal("Text"):Connect(function()
-		if txt.Text == "ACCEPT" then
-			resetPanels()
-			acceptMode = true
-		else
-			acceptMode = false
-		end
-	end)
-end
-
-task.spawn(connectAcceptWatcher)
-
----------------------------------------------------------------------
--- TRADE VISIBILITY
----------------------------------------------------------------------
-tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
-	if tradeUI.Visible then
-		resetPanels()
-	else
-		if not warningTemplate.Visible then
-			confirmationUI.Enabled = false
-		end
+-- ACCEPT WATCHER
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		pcall(function()
+			local txt = tradeUI.Other.ReadyButton.Txt
+			if txt.Text == "ACCEPT" then
+				resetPanels()
+			end
+		end)
 	end
 end)
 
----------------------------------------------------------------------
--- CREATE PANEL (PATCHED ACCEPT MODE BEHAVIOR)
----------------------------------------------------------------------
+-- CREATE PANEL
 local function createAdminPanel(preset)
-	if not scriptEnabled then return end
-
 	local clone = template:Clone()
-	clone.Name = "AdminPanel"
 	clone.Parent = scrollingFrame
 	clone.Visible = true
 
@@ -250,84 +143,70 @@ local function createAdminPanel(preset)
 	local cash = spacer:WaitForChild("Cash")
 	local title = spacer:WaitForChild("Title")
 
-	local stroke = spacer:FindFirstChildOfClass("UIStroke")
-
 	cash.Text = preset.Cash
 	title.Text = preset.Title
 
 	spacer.BackgroundColor3 = defaultColor
 
-	if stroke then
-		stroke.Color = Color3.fromRGB(0,0,0)
-	end
+	local stroke = spacer:FindFirstChildOfClass("UIStroke")
+	if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
 
-	clone:SetAttribute("Clicked",false)
-	clone:SetAttribute("PresetName",preset.Name)
+	clone:SetAttribute("Clicked", false)
+	clone:SetAttribute("PresetName", preset.Name)
 
-	local img = spacer:FindFirstChild("CustomImage")
-	if not img then
-		img = Instance.new("ImageLabel")
-		img.Name = "CustomImage"
-		img.Parent = spacer
-		img.BackgroundTransparency = 1
-		img.Size = UDim2.new(0.5,0,0.5,0)
-		img.Position = UDim2.new(0.25,0,0.25,0)
-	end
-
+	local img = spacer:FindFirstChild("CustomImage") or Instance.new("ImageLabel")
+	img.Name = "CustomImage"
+	img.Parent = spacer
+	img.BackgroundTransparency = 1
+	img.Size = UDim2.new(0.5,0,0.5,0)
+	img.Position = UDim2.new(0.25,0,0.25,0)
 	img.Image = preset.Image
 
-	local holding = false
-
-	spacer.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			holding = true
-			if clone:GetAttribute("Clicked") then
-				spacer.BackgroundColor3 = holdColor
-			end
-		end
-	end)
-
 	spacer.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			if not holding then return end
-			holding = false
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 
-			clickSound:Play()
+		clickSound:Play()
 
-			-- ⭐ ACCEPT MODE OVERRIDE (NO PROMPT)
-			if acceptMode then
-				clone:SetAttribute("Clicked",true)
-				spacer.BackgroundColor3 = clickedColor
-				if stroke then stroke.Color = strokeClickedColor end
+		if clone:GetAttribute("Clicked") then
+			clone:SetAttribute("Clicked", false)
+			spacer.BackgroundColor3 = defaultColor
+			if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
 
-				showNotification("Auto added "..preset.Title, Color3.fromRGB(0,255,255))
-				return
-			end
-
-			if clone:GetAttribute("Clicked") then
-				clone:SetAttribute("Clicked",false)
-				spacer.BackgroundColor3 = defaultColor
-
-				if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
-
-				failSound:Play()
-
-				showNotification("Removed "..preset.Title, Color3.fromRGB(255,0,0))
-				return
-			end
-
-			pendingPanel = clone
-			confirmationUI.Enabled = true
-			warningTemplate.Visible = true
+			failSound:Play()
+			showNotification('Failed to add "'..preset.Title..'" to trade!', Color3.fromRGB(255,0,0))
+			return
 		end
+
+		pendingPanel = clone
+
+		-- ✅ AUTO ACCEPT OVERRIDE (NO PROMPT)
+		if isAcceptState() then
+			clone:SetAttribute("Clicked", true)
+			spacer.BackgroundColor3 = clickedColor
+			if stroke then stroke.Color = strokeClickedColor end
+			return
+		end
+
+		confirmationUI.Enabled = true
+		warningTemplate.Visible = true
 	end)
 
-	table.insert(adminPanels,clone)
+	table.insert(adminPanels, clone)
 end
 
----------------------------------------------------------------------
--- YES BUTTON (FIXED TEXT REQUIREMENT)
----------------------------------------------------------------------
+-- REMOVE
+local function removePreset(name)
+	for i = #adminPanels,1,-1 do
+		local p = adminPanels[i]
+		if p and p:GetAttribute("PresetName") == name then
+			p:Destroy()
+			table.remove(adminPanels,i)
+			break
+		end
+	end
+end
+
+-- YES
 yesButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -338,108 +217,152 @@ yesButton.MouseButton1Click:Connect(function()
 		local spacer = pendingPanel:FindFirstChild("Spacer")
 		if spacer then
 			local stroke = spacer:FindFirstChildOfClass("UIStroke")
-
 			spacer.BackgroundColor3 = clickedColor
 			if stroke then stroke.Color = strokeClickedColor end
-
 			pendingPanel:SetAttribute("Clicked",true)
 		end
 	end
 
-	showNotification(
-		"Successfully added item to trade!",
-		Color3.fromRGB(0,255,0)
-	)
+	showNotification("Successfully added item to trade!", Color3.fromRGB(0,255,0))
 end)
 
----------------------------------------------------------------------
--- NO BUTTON (UPDATED REQUESTED TEXT FIX)
----------------------------------------------------------------------
+-- NO
 noButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
-
 	failSound:Play()
-
-	showNotification(
-		"Failed to add \"[🎁] Admin Commands\" to trade!",
-		Color3.fromRGB(255,0,0)
-	)
+	showNotification("Cancelled trade action", Color3.fromRGB(255,0,0))
 end)
 
----------------------------------------------------------------------
--- ===========================
--- UI + STYLE OVERHAUL LAYER
--- ===========================
----------------------------------------------------------------------
+--========================--
+-- UI
+--========================--
 
--- make UI neon themed
-local function neonify(obj)
-	if obj:IsA("Frame") then
-		obj.BackgroundColor3 = Color3.fromRGB(20,20,35)
-	elseif obj:IsA("TextLabel") then
-		obj.Font = Enum.Font.GothamBlack
-		obj.TextColor3 = Color3.fromRGB(255,120,255)
-	elseif obj:IsA("TextButton") then
-		obj.Font = Enum.Font.GothamBlack
-	end
+local gui = Instance.new("ScreenGui")
+gui.Name = "SpawnerUI"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
 
-	local stroke = obj:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = Color3.fromRGB(180,60,255)
-		stroke.Thickness = 2
-	end
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.new(0,320,0,350)
+frame.Position = UDim2.new(0.5,-160,0.5,-175)
+frame.BackgroundColor3 = Color3.fromRGB(15,10,20)
+frame.BorderSizePixel = 0
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
+
+local stroke = Instance.new("UIStroke", frame)
+stroke.Color = Color3.fromRGB(200,0,255)
+stroke.Thickness = 2
+
+local gradient = Instance.new("UIGradient", frame)
+gradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,180)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(90,0,120))
+})
+
+-- TOP
+local topBar = Instance.new("Frame", frame)
+topBar.Size = UDim2.new(1,0,0,40)
+topBar.BackgroundColor3 = Color3.fromRGB(25,10,40)
+
+local title = Instance.new("TextLabel", topBar)
+title.Size = UDim2.new(1,-100,1,0)
+title.Position = UDim2.new(0,10,0,0)
+title.Text = "t17ed's Spawner"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(255,150,255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- MINIMIZE
+local minimize = Instance.new("TextButton", topBar)
+minimize.Size = UDim2.new(0,30,0,30)
+minimize.Position = UDim2.new(1,-35,0.5,-15)
+minimize.Text = "-"
+minimize.BackgroundColor3 = Color3.fromRGB(120,0,120)
+minimize.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", minimize)
+
+local holder = Instance.new("Frame", frame)
+holder.BackgroundTransparency = 1
+holder.Position = UDim2.new(0,10,0,50)
+holder.Size = UDim2.new(1,-20,1,-60)
+
+local grid = Instance.new("UIGridLayout", holder)
+grid.CellSize = UDim2.new(0,90,0,90)
+grid.CellPadding = UDim2.new(0,10,0,10)
+
+for _,preset in ipairs(presets) do
+	local b = Instance.new("ImageButton", holder)
+	b.Image = preset.Image
+	b.BackgroundColor3 = Color3.fromRGB(40,0,60)
+	Instance.new("UICorner", b)
+
+	b.MouseButton1Click:Connect(function()
+		createAdminPanel(preset)
+	end)
+
+	b.MouseButton2Click:Connect(function()
+		removePreset(preset.Name)
+	end)
 end
 
----------------------------------------------------------------------
--- HOOK EXISTING UI AFTER CREATION
----------------------------------------------------------------------
-task.spawn(function()
-	while true do
-		pcall(function()
-			for _,v in ipairs(playerGui:GetDescendants()) do
-				if v:IsA("GuiObject") then
-					neonify(v)
-				end
-			end
-		end)
-		task.wait(2)
+-- NEON SLIDER TOGGLE
+local toggleBack = Instance.new("Frame", frame)
+toggleBack.Size = UDim2.new(0,180,0,25)
+toggleBack.Position = UDim2.new(0.5,-90,1,-40)
+toggleBack.BackgroundColor3 = Color3.fromRGB(40,0,60)
+Instance.new("UICorner", toggleBack)
+
+local knob = Instance.new("Frame", toggleBack)
+knob.Size = UDim2.new(0,20,0,20)
+knob.Position = UDim2.new(0,2,0.5,-10)
+knob.BackgroundColor3 = Color3.fromRGB(255,0,200)
+Instance.new("UICorner", knob)
+
+local enabled = false
+
+toggleBack.InputBegan:Connect(function()
+	enabled = not enabled
+	autoAccept = enabled
+
+	TweenService:Create(knob, TweenInfo.new(0.15), {
+		Position = enabled and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)
+	}):Play()
+end)
+
+-- DRAG
+local dragging, dragStart, startPos
+
+topBar.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = i.Position
+		startPos = frame.Position
 	end
 end)
 
----------------------------------------------------------------------
--- NEON AUTO ACCEPT SLIDER (PATCH)
----------------------------------------------------------------------
-task.spawn(function()
-	task.wait(1)
-
-	local toggle = nil
-	for _,v in ipairs(playerGui:GetDescendants()) do
-		if v:IsA("TextButton") and v.Text:find("Autoaccept") then
-			toggle = v
-		end
+UIS.InputChanged:Connect(function(i)
+	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+		local d = i.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 	end
+end)
 
-	if toggle then
-		local slider = Instance.new("Frame")
-		slider.Size = UDim2.new(0,30,0,30)
-		slider.Position = UDim2.new(1,-35,0.5,-15)
-		slider.BackgroundColor3 = Color3.fromRGB(255,0,200)
-		slider.Parent = toggle
+-- AUTO ACCEPT LOOP
+RunService.Heartbeat:Connect(function()
+	if not autoAccept then return end
+	if not tradeUI then return end
 
-		local c = Instance.new("UICorner",slider)
+	local ok, txt = pcall(function()
+		return tradeUI.Other.ReadyButton.Txt
+	end)
 
-		local on = false
-
-		toggle.MouseButton1Click:Connect(function()
-			on = not on
-			autoAccept = on
-
-			TweenService:Create(slider,TweenInfo.new(0.15),{
-				Position = on and UDim2.new(1,-15,0.5,-15) or UDim2.new(0,5,0.5,-15)
-			}):Play()
-
-			toggle.Text = on and "Autoaccept: ON" or "Autoaccept: OFF"
-		end)
+	if ok and txt and txt.Text == "ACCEPT" then
+		-- no prompt behavior already handled
 	end
 end)
