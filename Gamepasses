@@ -266,55 +266,6 @@ tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	end
 end)
 
--- YES / NO HOVER ANIMATIONS
-local yesScale = Instance.new("UIScale")
-yesScale.Parent = yesButton
-yesScale.Scale = 1
-
-local noScale = Instance.new("UIScale")
-noScale.Parent = noButton
-noScale.Scale = 1
-
-yesButton.MouseEnter:Connect(function()
-	TweenService:Create(
-		yesScale,
-		TweenInfo.new(0.12,Enum.EasingStyle.Quint),
-		{
-			Scale = 1.08
-		}
-	):Play()
-end)
-
-yesButton.MouseLeave:Connect(function()
-	TweenService:Create(
-		yesScale,
-		TweenInfo.new(0.12,Enum.EasingStyle.Quint),
-		{
-			Scale = 1
-		}
-	):Play()
-end)
-
-noButton.MouseEnter:Connect(function()
-	TweenService:Create(
-		noScale,
-		TweenInfo.new(0.12,Enum.EasingStyle.Quint),
-		{
-			Scale = 1.08
-		}
-	):Play()
-end)
-
-noButton.MouseLeave:Connect(function()
-	TweenService:Create(
-		noScale,
-		TweenInfo.new(0.12,Enum.EasingStyle.Quint),
-		{
-			Scale = 1
-		}
-	):Play()
-end)
-
 -- CREATE PANEL
 local function createAdminPanel(preset)
 	local clone = template:Clone()
