@@ -1,8 +1,3 @@
---// ADMIN PANEL SPAWNER
---// FULL RECREATED SCRIPT
---// LocalScript
-
--- SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -11,7 +6,6 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- TRADE UI
 local tradeUI = playerGui:WaitForChild("TradeLiveTrade"):WaitForChild("TradeLiveTrade")
 local yourFrame = tradeUI:WaitForChild("Your")
 local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
@@ -19,7 +13,6 @@ local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
 local template = scrollingFrame:WaitForChild("Template")
 template.Visible = false
 
--- CONFIRMATION UI
 local confirmationUI = playerGui:WaitForChild("Confirmation")
 local warningTemplate = confirmationUI:WaitForChild("WarningTemplate")
 
@@ -29,33 +22,28 @@ local description = content:WaitForChild("Description")
 local yesButton = warningTemplate:WaitForChild("Yes")
 local noButton = warningTemplate:WaitForChild("No")
 
--- NOTIFICATIONS
 local notificationRoot = playerGui:WaitForChild("Notification")
 local notificationUI = notificationRoot:WaitForChild("Notification")
 
 local notifTemplate = notificationUI:WaitForChild("Template")
 
--- COLORS
 local defaultColor = Color3.fromRGB(35,45,50)
 local clickedColor = Color3.fromRGB(15,50,15)
 local holdColor = Color3.fromRGB(81,103,81)
 local strokeClickedColor = Color3.fromRGB(15,255,15)
 
--- EXTRA COLORS
 local neonPink = Color3.fromRGB(255, 20, 147)
 local neonPurple = Color3.fromRGB(180, 60, 255)
 local darkPurple = Color3.fromRGB(28, 18, 40)
 local panelDark = Color3.fromRGB(18,18,24)
 local softPink = Color3.fromRGB(255,120,220)
 
--- STATE
 local adminPanels = {}
 local pendingPanel = nil
 local autoAccept = false
 local acceptSpeed = 25
 local lastAccept = 0
 
--- PRESETS
 local presets = {
 	{
 		Name = "Admin",
@@ -93,7 +81,6 @@ local presets = {
 	},
 }
 
--- SOUNDS
 local yesSound = Instance.new("Sound")
 yesSound.SoundId = "rbxassetid://83245966620103"
 yesSound.Volume = 0.5
@@ -109,11 +96,9 @@ failSound.SoundId = "rbxassetid://126210834885859"
 failSound.Volume = 0.5
 failSound.Parent = warningTemplate
 
--- DESCRIPTION
 description.Text =
 	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
--- FORCE SETTINGS TEXT
 task.spawn(function()
 	local connected = false
 
@@ -145,7 +130,6 @@ task.spawn(function()
 	end
 end)
 
--- HIDE SELECTIONS
 local function hideSelections()
 	for _,v in ipairs(scrollingFrame:GetChildren()) do
 		if v.Name:find("Selection") then
@@ -168,7 +152,6 @@ task.spawn(function()
 	end
 end)
 
--- NOTIFICATION
 local function showNotification(text,color)
 	local clone = notifTemplate:Clone()
 	clone.Parent = notificationUI
@@ -219,7 +202,6 @@ local function showNotification(text,color)
 	end)
 end
 
--- RESET COLORS
 local function resetPanels()
 	for _,panel in ipairs(adminPanels) do
 		if panel and panel.Parent then
@@ -240,7 +222,6 @@ local function resetPanels()
 	end
 end
 
--- ACCEPT CHECK
 local function connectAcceptWatcher()
 	local other = tradeUI:WaitForChild("Other")
 	local readyButton = other:WaitForChild("ReadyButton")
@@ -255,7 +236,6 @@ end
 
 task.spawn(connectAcceptWatcher)
 
--- TRADE VISIBILITY
 tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	if tradeUI.Visible then
 		resetPanels()
@@ -266,7 +246,6 @@ tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	end
 end)
 
--- CREATE PANEL
 local function createAdminPanel(preset)
 	local clone = template:Clone()
 	clone.Name = "AdminPanel"
@@ -371,7 +350,6 @@ local function createAdminPanel(preset)
 	table.insert(adminPanels,clone)
 end
 
--- COUNTS
 local function getVisibleCount(name)
 	local count = 0
 
@@ -386,7 +364,6 @@ local function getVisibleCount(name)
 	return count
 end
 
--- REMOVE PANEL
 local function removePreset(name)
 	for i = #adminPanels,1,-1 do
 		local panel = adminPanels[i]
@@ -401,7 +378,6 @@ local function removePreset(name)
 	end
 end
 
--- YES BUTTON
 yesButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -450,7 +426,6 @@ yesButton.MouseButton1Click:Connect(function()
 	)
 end)
 
--- NO BUTTON
 noButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -463,7 +438,6 @@ noButton.MouseButton1Click:Connect(function()
 	)
 end)
 
--- UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "SpawnerUI"
 gui.ResetOnSpawn = false
@@ -495,7 +469,6 @@ stroke.Parent = frame
 stroke.Color = neonPink
 stroke.Thickness = 2
 
--- OPEN ANIMATION
 frame.Size = UDim2.new(0,0,0,0)
 frame.Position = UDim2.new(0.5,0,0.5,0)
 
@@ -508,7 +481,6 @@ TweenService:Create(
 	}
 ):Play()
 
--- TOPBAR
 local topBar = Instance.new("Frame")
 topBar.Parent = frame
 topBar.Size = UDim2.new(1,0,0,42)
@@ -594,7 +566,6 @@ grid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	end
 end)
 
--- PRESET BUTTONS
 for _,preset in ipairs(presets) do
 	local button = Instance.new("ImageButton")
 	button.Parent = buttonsHolder
@@ -624,7 +595,7 @@ for _,preset in ipairs(presets) do
 	local labelStroke = Instance.new("UIStroke")
 	labelStroke.Parent = label
 	labelStroke.Thickness = 1.5
-	labelStroke.Color = Color3.new(0,0,0)
+	labelStroke.Color = Color3.new(135,50,96)
 
 	local counter = Instance.new("TextLabel")
 	counter.Parent = button
@@ -702,7 +673,6 @@ for _,preset in ipairs(presets) do
 	end)
 end
 
--- AUTO ACCEPT TITLE
 local autoText = Instance.new("TextLabel")
 autoText.Parent = frame
 autoText.BackgroundTransparency = 1
@@ -718,7 +688,6 @@ autoStroke.Parent = autoText
 autoStroke.Thickness = 1.8
 autoStroke.Color = neonPink
 
--- SLIDER TOGGLE
 local toggleHolder = Instance.new("Frame")
 toggleHolder.Parent = frame
 toggleHolder.Position = UDim2.new(0.5,-29,1,-108)
@@ -786,7 +755,6 @@ toggleHolder.InputBegan:Connect(function(input)
 	end
 end)
 
--- SPEED SLIDER
 local sliderFrame = Instance.new("Frame")
 sliderFrame.Parent = frame
 sliderFrame.Size = UDim2.new(0,240,0,8)
@@ -822,7 +790,7 @@ speedText.Parent = frame
 speedText.BackgroundTransparency = 1
 speedText.Position = UDim2.new(0,0,1,-52)
 speedText.Size = UDim2.new(1,0,0,20)
-speedText.Text = "Accept Speed: ~25 times/sec"
+speedText.Text = "Speed # ~25 times/sec"
 speedText.Font = Enum.Font.GothamBold
 speedText.TextSize = 13
 speedText.TextColor3 = Color3.new(1,1,1)
@@ -841,7 +809,7 @@ local function updateSlider(x)
 
 	acceptSpeed = math.floor(25 + (percent * 475))
 
-	speedText.Text = "Accept Speed: ~"..acceptSpeed.." times/sec"
+	speedText.Text = "Speed # ~"..acceptSpeed.." times/sec"
 end
 
 updateSlider(sliderFrame.AbsolutePosition.X)
@@ -870,7 +838,6 @@ sliderFrame.InputBegan:Connect(function(input)
 	end
 end)
 
--- WEBSITE
 local website = Instance.new("TextButton")
 website.Parent = frame
 website.Size = UDim2.new(1,0,0,24)
@@ -919,7 +886,6 @@ website.MouseButton1Click:Connect(function()
 	)
 end)
 
--- MINIMIZE
 local minimized = false
 
 minimize.MouseButton1Click:Connect(function()
@@ -962,7 +928,6 @@ minimize.MouseButton1Click:Connect(function()
 	end
 end)
 
--- KEYBIND
 UIS.InputBegan:Connect(function(input,gpe)
 	if gpe then return end
 
@@ -971,7 +936,6 @@ UIS.InputBegan:Connect(function(input,gpe)
 	end
 end)
 
--- DRAGGING
 local dragging = false
 local dragStart
 local startPos
@@ -1003,7 +967,6 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- AUTO ACCEPT
 local readyFrame
 local readyButton
 
@@ -1070,11 +1033,6 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 end)
-
--- =========================================================
--- GREEN BUTTON VISIBILITY FILTER
--- ONLY SHOW GREEN BUTTONS WHEN TEXT == "ACCEPT"
--- =========================================================
 
 local function isGreenStyle(panel)
 	if not panel then return false end
