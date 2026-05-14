@@ -44,6 +44,18 @@ local autoAccept = false
 local acceptSpeed = 25
 local lastAccept = 0
 
+local function makeNeonText(obj, color)
+	if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+		obj.TextColor3 = color
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Parent = obj
+		stroke.Color = color
+		stroke.Thickness = 2
+		stroke.Transparency = 0.2
+	end
+end
+
 local presets = {
 	{
 		Name = "Admin",
@@ -503,7 +515,7 @@ title.Position = UDim2.new(0,12,0,0)
 title.Size = UDim2.new(1,-60,1,0)
 title.Font = Enum.Font.GothamBlack
 title.Text = "t17ed's Spawner"
-title.TextColor3 = Color3.new(1,1,1)
+makeNeonText(title, neonPink)
 title.TextSize = 20
 title.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -590,7 +602,7 @@ for _,preset in ipairs(presets) do
 	label.Text = preset.Name
 	label.Font = Enum.Font.GothamBlack
 	label.TextSize = 12
-	label.TextColor3 = Color3.new(1,1,1)
+	makeNeonText(label, neonPink)
 
 	local labelStroke = Instance.new("UIStroke")
 	labelStroke.Parent = label
@@ -614,7 +626,9 @@ for _,preset in ipairs(presets) do
 
 	local counterStroke = Instance.new("UIStroke")
 	counterStroke.Parent = counter
-	counterStroke.Color = Color3.new(1,1,1)
+	counterStroke.Color = neonPink
+	counterStroke.Thickness = 1.5
+	counterStroke.Transparency = 0.2
 
 	local uiScale = Instance.new("UIScale")
 	uiScale.Parent = button
@@ -679,6 +693,7 @@ autoText.BackgroundTransparency = 1
 autoText.Position = UDim2.new(0.5,-70,1,-135)
 autoText.Size = UDim2.new(0,140,0,24)
 autoText.Text = "AUTO ACCEPT"
+makeNeonText(autoText, softPink)
 autoText.Font = Enum.Font.GothamBlack
 autoText.TextSize = 15
 autoText.TextColor3 = Color3.new(1,1,1)
@@ -791,6 +806,7 @@ speedText.BackgroundTransparency = 1
 speedText.Position = UDim2.new(0,0,1,-52)
 speedText.Size = UDim2.new(1,0,0,20)
 speedText.Text = "Speed # ~25 times/sec"
+makeNeonText(speedText, neonPurple)
 speedText.Font = Enum.Font.GothamBold
 speedText.TextSize = 13
 speedText.TextColor3 = Color3.new(1,1,1)
@@ -844,6 +860,7 @@ website.Size = UDim2.new(1,0,0,24)
 website.Position = UDim2.new(0,0,1,-28)
 website.BackgroundTransparency = 1
 website.Text = "t17ed.github.io"
+makeNeonText(website, softPink)
 website.Font = Enum.Font.GothamBlack
 website.TextSize = 15
 website.TextColor3 = softPink
