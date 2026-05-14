@@ -354,7 +354,7 @@ local function createAdminPanel(preset)
 				failSound:Play()
 
 				showNotification(
-					'Removed "'..preset.Title..'"',
+					'Removed "'..preset.Title..'" from the trade!',
 					Color3.fromRGB(255,0,0)
 				)
 
