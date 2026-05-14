@@ -52,6 +52,8 @@ local softPink = Color3.fromRGB(255,120,220)
 local adminPanels = {}
 local pendingPanel = nil
 local autoAccept = false
+local acceptSpeed = 3
+local lastAccept = 0
 
 -- PRESETS
 local presets = {
@@ -111,7 +113,7 @@ failSound.Parent = warningTemplate
 description.Text =
 	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
--- SETTINGS TEXT CHANGE
+-- FORCE SETTINGS TEXT NO FLICKER
 task.spawn(function()
 	while true do
 		pcall(function()
@@ -124,10 +126,18 @@ task.spawn(function()
 				:WaitForChild("VFX")
 				:WaitForChild("Function")
 
-			functionText.Text = "Gamepass Trading"
+			if functionText.Text ~= "Gamepass Trading" then
+				functionText.Text = "Gamepass Trading"
+			end
+
+			functionText:GetPropertyChangedSignal("Text"):Connect(function()
+				if functionText.Text ~= "Gamepass Trading" then
+					functionText.Text = "Gamepass Trading"
+				end
+			end)
 		end)
 
-		task.wait(1)
+		task.wait(0.25)
 	end
 end)
 
@@ -174,8 +184,27 @@ local function showNotification(text,color)
 		txt.TextColor3 = color
 	end
 
+	clone.Position = clone.Position + UDim2.new(0,300,0,0)
+
+	TweenService:Create(
+		clone,
+		TweenInfo.new(0.35,Enum.EasingStyle.Quint),
+		{
+			Position = clone.Position - UDim2.new(0,300,0,0)
+		}
+	):Play()
+
 	task.delay(5,function()
 		if clone then
+			TweenService:Create(
+				clone,
+				TweenInfo.new(0.25),
+				{
+					BackgroundTransparency = 1
+				}
+			):Play()
+
+			task.wait(0.25)
 			clone:Destroy()
 		end
 	end)
@@ -208,7 +237,7 @@ local function connectAcceptWatcher()
 	local txt = readyButton:WaitForChild("Txt")
 
 	txt:GetPropertyChangedSignal("Text"):Connect(function()
-		if txt.Text == "ACCEPT" then
+		if txt.Text == "ACCEPTED" then
 			resetPanels()
 		end
 	end)
@@ -265,11 +294,29 @@ local function createAdminPanel(preset)
 
 	img.Image = preset.Image
 
+	spacer.Size = UDim2.new(0.8,0,0.8,0)
+
+	TweenService:Create(
+		spacer,
+		TweenInfo.new(0.25,Enum.EasingStyle.Back),
+		{
+			Size = UDim2.new(1,0,1,0)
+		}
+	):Play()
+
 	local holding = false
 
 	spacer.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			holding = true
+
+			TweenService:Create(
+				spacer,
+				TweenInfo.new(0.08),
+				{
+					Size = UDim2.new(0.94,0,0.94,0)
+				}
+			):Play()
 
 			if clone:GetAttribute("Clicked") then
 				spacer.BackgroundColor3 = holdColor
@@ -284,6 +331,14 @@ local function createAdminPanel(preset)
 			end
 
 			holding = false
+
+			TweenService:Create(
+				spacer,
+				TweenInfo.new(0.12),
+				{
+					Size = UDim2.new(1,0,1,0)
+				}
+			):Play()
 
 			clickSound:Play()
 
@@ -366,6 +421,24 @@ yesButton.MouseButton1Click:Connect(function()
 			end
 
 			pendingPanel:SetAttribute("Clicked",true)
+
+			TweenService:Create(
+				spacer,
+				TweenInfo.new(0.15,Enum.EasingStyle.Back),
+				{
+					Rotation = 4
+				}
+			):Play()
+
+			task.delay(0.15,function()
+				TweenService:Create(
+					spacer,
+					TweenInfo.new(0.15),
+					{
+						Rotation = 0
+					}
+				):Play()
+			end)
 		end
 	end
 
@@ -402,6 +475,7 @@ frame.Size = UDim2.new(0,340,0,360)
 frame.Position = UDim2.new(0.5,-170,0.5,-180)
 frame.BackgroundColor3 = panelDark
 frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0,14)
@@ -418,6 +492,19 @@ local stroke = Instance.new("UIStroke")
 stroke.Parent = frame
 stroke.Color = neonPink
 stroke.Thickness = 2
+
+-- OPEN ANIMATION
+frame.Size = UDim2.new(0,0,0,0)
+frame.Position = UDim2.new(0.5,0,0.5,0)
+
+TweenService:Create(
+	frame,
+	TweenInfo.new(0.45,Enum.EasingStyle.Back,Enum.EasingDirection.Out),
+	{
+		Size = UDim2.new(0,340,0,430),
+		Position = UDim2.new(0.5,-170,0.5,-215)
+	}
+):Play()
 
 -- TOPBAR
 local topBar = Instance.new("Frame")
@@ -475,6 +562,7 @@ grid.Parent = buttonsHolder
 grid.CellSize = UDim2.new(0,95,0,95)
 grid.CellPadding = UDim2.new(0,10,0,10)
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+grid.VerticalAlignment = Enum.VerticalAlignment.Center
 
 -- PRESET BUTTONS
 for _,preset in ipairs(presets) do
@@ -483,6 +571,7 @@ for _,preset in ipairs(presets) do
 	button.Image = preset.Image
 	button.BackgroundColor3 = Color3.fromRGB(45,45,60)
 	button.BorderSizePixel = 0
+	button.ScaleType = Enum.ScaleType.Fit
 
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.Parent = button
@@ -526,6 +615,10 @@ for _,preset in ipairs(presets) do
 	counterStroke.Parent = counter
 	counterStroke.Color = Color3.new(1,1,1)
 
+	local uiScale = Instance.new("UIScale")
+	uiScale.Parent = button
+	uiScale.Scale = 1
+
 	local function flash(color)
 		local tween1 = TweenService:Create(
 			button,
@@ -543,6 +636,26 @@ for _,preset in ipairs(presets) do
 		tween1.Completed:Wait()
 		tween2:Play()
 	end
+
+	button.MouseEnter:Connect(function()
+		TweenService:Create(
+			uiScale,
+			TweenInfo.new(0.12),
+			{
+				Scale = 1.08
+			}
+		):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(
+			uiScale,
+			TweenInfo.new(0.12),
+			{
+				Scale = 1
+			}
+		):Play()
+	end)
 
 	button.MouseButton1Click:Connect(function()
 		createAdminPanel(preset)
@@ -563,7 +676,7 @@ end
 local autoText = Instance.new("TextLabel")
 autoText.Parent = frame
 autoText.BackgroundTransparency = 1
-autoText.Position = UDim2.new(0,18,1,-88)
+autoText.Position = UDim2.new(0.5,-70,1,-135)
 autoText.Size = UDim2.new(0,140,0,24)
 autoText.Text = "AUTO ACCEPT"
 autoText.Font = Enum.Font.GothamBlack
@@ -578,7 +691,7 @@ autoStroke.Color = neonPink
 -- SLIDER TOGGLE
 local toggleHolder = Instance.new("Frame")
 toggleHolder.Parent = frame
-toggleHolder.Position = UDim2.new(1,-78,1,-86)
+toggleHolder.Position = UDim2.new(0.5,-29,1,-108)
 toggleHolder.Size = UDim2.new(0,58,0,28)
 toggleHolder.BackgroundColor3 = Color3.fromRGB(50,20,40)
 
@@ -643,11 +756,92 @@ toggleHolder.InputBegan:Connect(function(input)
 	end
 end)
 
+-- SPEED SLIDER
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Parent = frame
+sliderFrame.Size = UDim2.new(0,240,0,8)
+sliderFrame.Position = UDim2.new(0.5,-120,1,-62)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(45,20,40)
+
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.Parent = sliderFrame
+sliderCorner.CornerRadius = UDim.new(1,0)
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Parent = sliderFrame
+sliderFill.Size = UDim2.new(0.3,0,1,0)
+sliderFill.BackgroundColor3 = neonPink
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.Parent = sliderFill
+fillCorner.CornerRadius = UDim.new(1,0)
+
+local knob = Instance.new("Frame")
+knob.Parent = sliderFrame
+knob.AnchorPoint = Vector2.new(0.5,0.5)
+knob.Position = UDim2.new(0.3,0,0.5,0)
+knob.Size = UDim2.new(0,18,0,18)
+knob.BackgroundColor3 = Color3.new(1,1,1)
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.Parent = knob
+knobCorner.CornerRadius = UDim.new(1,0)
+
+local speedText = Instance.new("TextLabel")
+speedText.Parent = frame
+speedText.BackgroundTransparency = 1
+speedText.Position = UDim2.new(0,0,1,-52)
+speedText.Size = UDim2.new(1,0,0,20)
+speedText.Text = "Accept Speed: ~3 times/sec"
+speedText.Font = Enum.Font.GothamBold
+speedText.TextSize = 13
+speedText.TextColor3 = Color3.new(1,1,1)
+
+local draggingSlider = false
+
+local function updateSlider(x)
+	local percent = math.clamp(
+		(x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X,
+		0,
+		1
+	)
+
+	sliderFill.Size = UDim2.new(percent,0,1,0)
+	knob.Position = UDim2.new(percent,0,0.5,0)
+
+	acceptSpeed = math.floor(1 + (percent * 19))
+	speedText.Text = "Accept Speed: ~"..acceptSpeed.." times/sec"
+end
+
+knob.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = true
+	end
+end)
+
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		updateSlider(input.Position.X)
+	end
+end)
+
+sliderFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		updateSlider(input.Position.X)
+	end
+end)
+
 -- WEBSITE
 local website = Instance.new("TextButton")
 website.Parent = frame
 website.Size = UDim2.new(1,0,0,24)
-website.Position = UDim2.new(0,0,1,-35)
+website.Position = UDim2.new(0,0,1,-28)
 website.BackgroundTransparency = 1
 website.Text = "t17ed.github.io"
 website.Font = Enum.Font.GothamBlack
@@ -713,6 +907,8 @@ minimize.MouseButton1Click:Connect(function()
 		toggleHolder.Visible = false
 		autoText.Visible = false
 		website.Visible = false
+		sliderFrame.Visible = false
+		speedText.Visible = false
 	else
 		minimize.Text = "-"
 
@@ -720,12 +916,14 @@ minimize.MouseButton1Click:Connect(function()
 		toggleHolder.Visible = true
 		autoText.Visible = true
 		website.Visible = true
+		sliderFrame.Visible = true
+		speedText.Visible = true
 
 		TweenService:Create(
 			frame,
 			TweenInfo.new(0.25,Enum.EasingStyle.Quint),
 			{
-				Size = UDim2.new(0,340,0,360)
+				Size = UDim2.new(0,340,0,430)
 			}
 		):Play()
 	end
@@ -832,14 +1030,17 @@ RunService.Heartbeat:Connect(function()
 	end
 
 	if readyFrame.Visible then
-		click(readyButton)
-		click(readyButton)
-		click(readyButton)
+		if tick() - lastAccept >= (1 / acceptSpeed) then
+			lastAccept = tick()
+
+			click(readyButton)
+		end
 	end
 end)
 
 -- =========================================================
--- NEW FEATURE: GREEN BUTTON VISIBILITY FILTER (ADDED ONLY)
+-- GREEN BUTTON VISIBILITY FILTER
+-- ONLY SHOW GREEN BUTTONS WHEN TEXT == "ACCEPT"
 -- =========================================================
 
 local function isGreenStyle(panel)
@@ -859,15 +1060,17 @@ end
 local function updateGreenVisibility()
 	local other = tradeUI:FindFirstChild("Other")
 	if not other then return end
+
 	local readyButton = other:FindFirstChild("ReadyButton")
 	if not readyButton then return end
+
 	local txt = readyButton:FindFirstChild("Txt")
 	if not txt then return end
 
-	local accepted = (txt.Text == "ACCEPTED")
+	local accepted = (txt.Text == "ACCEPT")
 
 	for _, panel in ipairs(adminPanels) do
-		if panel then
+		if panel and panel.Parent then
 			if accepted then
 				panel.Visible = isGreenStyle(panel)
 			else
@@ -880,7 +1083,7 @@ end
 task.spawn(function()
 	while true do
 		pcall(updateGreenVisibility)
-		task.wait(0.15)
+		task.wait(0.1)
 	end
 end)
 
