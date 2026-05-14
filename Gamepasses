@@ -5,6 +5,8 @@
 -- SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -39,9 +41,51 @@ local clickedColor = Color3.fromRGB(15,50,15)
 local holdColor = Color3.fromRGB(81,103,81)
 local strokeClickedColor = Color3.fromRGB(15,255,15)
 
+-- EXTRA COLORS
+local neonPink = Color3.fromRGB(255, 20, 147)
+local neonPurple = Color3.fromRGB(180, 60, 255)
+local darkPurple = Color3.fromRGB(28, 18, 40)
+local panelDark = Color3.fromRGB(18,18,24)
+local softPink = Color3.fromRGB(255,120,220)
+
 -- STATE
 local adminPanels = {}
 local pendingPanel = nil
+local autoAccept = false
+
+-- PRESETS
+local presets = {
+	{
+		Name = "Admin",
+		Image = "rbxassetid://139291316302932",
+		Cash = "9,999",
+		Title = "[🎁] Admin Panel"
+	},
+	{
+		Name = "VIP",
+		Image = "rbxassetid://89326624889199",
+		Cash = "499",
+		Title = "[🎁] VIP"
+	},
+	{
+		Name = "Hammer",
+		Image = "rbxassetid://113735454516185",
+		Cash = "1,499",
+		Title = "[🎁] Ban Hammer"
+	},
+	{
+		Name = "Laser",
+		Image = "rbxassetid://127461267233201",
+		Cash = "749",
+		Title = "[🎁] Laser Gun"
+	},
+	{
+		Name = "Money",
+		Image = "rbxassetid://93863319650684",
+		Cash = "299",
+		Title = "[🎁] 2x Money"
+	},
+}
 
 -- SOUNDS
 local yesSound = Instance.new("Sound")
@@ -62,6 +106,25 @@ failSound.Parent = warningTemplate
 -- DESCRIPTION
 description.Text =
 	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
+
+-- SETTINGS TEXT CHANGE
+task.spawn(function()
+	while true do
+		pcall(function()
+			local functionText =
+				playerGui
+				:WaitForChild("Settings")
+				:WaitForChild("Settings")
+				:WaitForChild("Content")
+				:WaitForChild("ScrollingFrame")
+				:WaitForChild("VFX")
+				:WaitForChild("Function")
+
+			functionText.Text = "Gamepass Trading"
+		end)
+		task.wait(1)
+	end
+end)
 
 -- HIDE SELECTIONS
 local function hideSelections()
@@ -160,7 +223,7 @@ tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 end)
 
 -- CREATE PANEL
-local function createAdminPanel()
+local function createAdminPanel(preset)
 	local clone = template:Clone()
 	clone.Name = "AdminPanel"
 	clone.Parent = scrollingFrame
@@ -172,8 +235,8 @@ local function createAdminPanel()
 
 	local stroke = spacer:FindFirstChildOfClass("UIStroke")
 
-	cash.Text = "9,999"
-	title.Text = "[🎁] Admin Panel"
+	cash.Text = preset.Cash
+	title.Text = preset.Title
 
 	spacer.BackgroundColor3 = defaultColor
 
@@ -182,8 +245,8 @@ local function createAdminPanel()
 	end
 
 	clone:SetAttribute("Clicked",false)
+	clone:SetAttribute("PresetName",preset.Name)
 
-	-- IMAGE
 	local img = spacer:FindFirstChild("CustomImage")
 
 	if not img then
@@ -191,12 +254,12 @@ local function createAdminPanel()
 		img.Name = "CustomImage"
 		img.Parent = spacer
 		img.BackgroundTransparency = 1
-		img.Image = "rbxassetid://139291316302932"
 		img.Size = UDim2.new(0.5,0,0.5,0)
 		img.Position = UDim2.new(0.25,0,0.25,0)
 	end
 
-	-- INPUTS
+	img.Image = preset.Image
+
 	local holding = false
 
 	spacer.InputBegan:Connect(function(input)
@@ -211,17 +274,13 @@ local function createAdminPanel()
 
 	spacer.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			if not holding then
-				return
-			end
-
+			if not holding then return end
 			holding = false
 
 			clickSound:Play()
 
 			if clone:GetAttribute("Clicked") then
 				clone:SetAttribute("Clicked",false)
-
 				spacer.BackgroundColor3 = defaultColor
 
 				if stroke then
@@ -231,7 +290,7 @@ local function createAdminPanel()
 				failSound:Play()
 
 				showNotification(
-					"Failed to add 'Admin Panel' to trade!",
+					"Removed "..preset.Title,
 					Color3.fromRGB(255,0,0)
 				)
 
@@ -239,7 +298,6 @@ local function createAdminPanel()
 			end
 
 			pendingPanel = clone
-
 			confirmationUI.Enabled = true
 			warningTemplate.Visible = true
 		end
@@ -248,15 +306,33 @@ local function createAdminPanel()
 	table.insert(adminPanels,clone)
 end
 
--- DELETE PANELS
-local function deleteAdminPanels()
+-- COUNTS
+local function getVisibleCount(name)
+	local count = 0
+
 	for _,v in ipairs(adminPanels) do
-		if v and v.Parent then
-			v:Destroy()
+		if v and v.Parent and v.Visible then
+			if v:GetAttribute("PresetName") == name then
+				count += 1
+			end
 		end
 	end
 
-	table.clear(adminPanels)
+	return count
+end
+
+-- REMOVE PANEL
+local function removePreset(name)
+	for i = #adminPanels,1,-1 do
+		local panel = adminPanels[i]
+		if panel and panel.Parent then
+			if panel:GetAttribute("PresetName") == name then
+				panel:Destroy()
+				table.remove(adminPanels,i)
+				break
+			end
+		end
+	end
 end
 
 -- YES BUTTON
@@ -268,7 +344,6 @@ yesButton.MouseButton1Click:Connect(function()
 
 	if pendingPanel and pendingPanel.Parent then
 		local spacer = pendingPanel:FindFirstChild("Spacer")
-
 		if spacer then
 			local stroke = spacer:FindFirstChildOfClass("UIStroke")
 
@@ -283,12 +358,12 @@ yesButton.MouseButton1Click:Connect(function()
 	end
 
 	showNotification(
-		"Successfully added 'Admin Panel' to trade!",
+		"Successfully added item to trade!",
 		Color3.fromRGB(0,255,0)
 	)
 end)
 
--- NO BUTTON
+-- NO BUTTON (UPDATED MESSAGE RULE REQUEST)
 noButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -296,101 +371,261 @@ noButton.MouseButton1Click:Connect(function()
 	failSound:Play()
 
 	showNotification(
-		"Failed to add 'Admin Panel' to trade!",
+		'Failed to add "[🎁] Admin Commands" to trade!',
 		Color3.fromRGB(255,0,0)
 	)
 end)
 
---========================--
--- SPAWNER UI
---========================--
-
+-- UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "SpawnerUI"
 gui.ResetOnSpawn = false
+gui.DisplayOrder = 999999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
 local frame = Instance.new("Frame")
 frame.Parent = gui
-frame.Size = UDim2.new(0,260,0,110)
-frame.Position = UDim2.new(0.5,-130,0.5,-55)
-frame.BackgroundColor3 = Color3.fromRGB(80,25,60)
+frame.Size = UDim2.new(0,340,0,360)
+frame.Position = UDim2.new(0.5,-170,0.5,-180)
+frame.BackgroundColor3 = panelDark
 frame.BorderSizePixel = 0
 
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0,10)
+corner.CornerRadius = UDim.new(0,14)
 corner.Parent = frame
 
 local stroke = Instance.new("UIStroke")
 stroke.Parent = frame
-stroke.Color = Color3.fromRGB(20,20,80)
+stroke.Color = neonPink
 stroke.Thickness = 2
 
-local glow = Instance.new("UIGradient")
-glow.Parent = frame
-glow.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0,Color3.fromRGB(120,40,100)),
-	ColorSequenceKeypoint.new(1,Color3.fromRGB(60,15,40))
-})
+-- TOPBAR
+local topBar = Instance.new("Frame")
+topBar.Parent = frame
+topBar.Size = UDim2.new(1,0,0,42)
+topBar.BackgroundColor3 = Color3.fromRGB(30,30,40)
+topBar.BorderSizePixel = 0
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0,14)
+topCorner.Parent = topBar
 
 local title = Instance.new("TextLabel")
-title.Parent = frame
+title.Parent = topBar
 title.BackgroundTransparency = 1
-title.Size = UDim2.new(1,0,0,30)
-title.Text = "Spawner"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 22
-title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Position = UDim2.new(0,12,0,0)
+title.Size = UDim2.new(1,-60,1,0)
+title.Font = Enum.Font.GothamBlack
+title.Text = "t17ed's Spawner"
+title.TextColor3 = Color3.new(1,1,1)
+title.TextSize = 20
+title.TextXAlignment = Enum.TextXAlignment.Left
 
--- ADD BUTTON
-local addButton = Instance.new("TextButton")
-addButton.Parent = frame
-addButton.Size = UDim2.new(0,50,0,40)
-addButton.Position = UDim2.new(0,15,0,50)
-addButton.Text = "+"
-addButton.Font = Enum.Font.GothamBold
-addButton.TextSize = 30
-addButton.TextColor3 = Color3.fromRGB(0,255,0)
-addButton.BackgroundColor3 = Color3.fromRGB(25,25,25)
+local titleStroke = Instance.new("UIStroke")
+titleStroke.Parent = title
+titleStroke.Thickness = 2
+titleStroke.Color = neonPink
 
-local addCorner = Instance.new("UICorner")
-addCorner.Parent = addButton
+local minimize = Instance.new("TextButton")
+minimize.Parent = topBar
+minimize.Size = UDim2.new(0,28,0,28)
+minimize.Position = UDim2.new(1,-36,0.5,-14)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBlack
+minimize.TextSize = 22
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.BackgroundColor3 = neonPurple
 
--- REMOVE BUTTON
-local removeButton = Instance.new("TextButton")
-removeButton.Parent = frame
-removeButton.Size = UDim2.new(0,50,0,40)
-removeButton.Position = UDim2.new(0,75,0,50)
-removeButton.Text = "-"
-removeButton.Font = Enum.Font.GothamBold
-removeButton.TextSize = 30
-removeButton.TextColor3 = Color3.fromRGB(255,0,0)
-removeButton.BackgroundColor3 = Color3.fromRGB(25,25,25)
+local minCorner = Instance.new("UICorner")
+minCorner.Parent = minimize
 
-local removeCorner = Instance.new("UICorner")
-removeCorner.Parent = removeButton
+local buttonsHolder = Instance.new("Frame")
+buttonsHolder.Parent = frame
+buttonsHolder.BackgroundTransparency = 1
+buttonsHolder.Position = UDim2.new(0,10,0,55)
+buttonsHolder.Size = UDim2.new(1,-20,0,220)
 
--- COUNT BOX
-local countBox = Instance.new("TextBox")
-countBox.Parent = frame
-countBox.Size = UDim2.new(0,100,0,40)
-countBox.Position = UDim2.new(0,140,0,50)
-countBox.Text = "0"
-countBox.ClearTextOnFocus = false
-countBox.Font = Enum.Font.GothamBold
-countBox.TextSize = 22
-countBox.TextColor3 = Color3.fromRGB(255,255,255)
-countBox.BackgroundColor3 = Color3.fromRGB(20,20,20)
+local grid = Instance.new("UIGridLayout")
+grid.Parent = buttonsHolder
+grid.CellSize = UDim2.new(0,95,0,95)
+grid.CellPadding = UDim2.new(0,10,0,10)
+grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local countCorner = Instance.new("UICorner")
-countCorner.Parent = countBox
+-- PRESET BUTTONS
+for _,preset in ipairs(presets) do
+	local button = Instance.new("ImageButton")
+	button.Parent = buttonsHolder
+	button.Image = preset.Image
+	button.BackgroundColor3 = Color3.fromRGB(45,45,60)
+	button.BorderSizePixel = 0
+
+	local buttonCorner = Instance.new("UICorner")
+	buttonCorner.Parent = button
+
+	local buttonStroke = Instance.new("UIStroke")
+	buttonStroke.Parent = button
+	buttonStroke.Color = neonPink
+	buttonStroke.Thickness = 1.5
+
+	local label = Instance.new("TextLabel")
+	label.Parent = button
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.new(0,0,1,-22)
+	label.Size = UDim2.new(1,0,0,20)
+	label.Text = preset.Name
+	label.Font = Enum.Font.GothamBlack
+	label.TextSize = 12
+	label.TextColor3 = Color3.new(1,1,1)
+
+	local labelStroke = Instance.new("UIStroke")
+	labelStroke.Parent = label
+	labelStroke.Thickness = 1.5
+	labelStroke.Color = Color3.new(0,0,0)
+
+	local counter = Instance.new("TextLabel")
+	counter.Parent = button
+	counter.AnchorPoint = Vector2.new(1,0)
+	counter.Position = UDim2.new(1,-5,0,5)
+	counter.Size = UDim2.new(0,24,0,24)
+	counter.BackgroundColor3 = neonPink
+	counter.BackgroundTransparency = 0.5
+	counter.Text = "0"
+	counter.Font = Enum.Font.GothamBlack
+	counter.TextSize = 13
+	counter.TextColor3 = Color3.new(1,1,1)
+
+	local counterCorner = Instance.new("UICorner")
+	counterCorner.Parent = counter
+
+	local counterStroke = Instance.new("UIStroke")
+	counterStroke.Parent = counter
+	counterStroke.Color = Color3.new(1,1,1)
+
+	local function flash(color)
+		local tween1 = TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = color})
+		local tween2 = TweenService:Create(button, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(45,45,60)})
+		tween1:Play()
+		tween1.Completed:Wait()
+		tween2:Play()
+	end
+
+	button.MouseButton1Click:Connect(function()
+		createAdminPanel(preset)
+		flash(neonPink)
+	end)
+
+	button.MouseButton2Click:Connect(function()
+		removePreset(preset.Name)
+		flash(Color3.fromRGB(255,70,70))
+	end)
+
+	RunService.Heartbeat:Connect(function()
+		counter.Text = tostring(getVisibleCount(preset.Name))
+	end)
+end
+
+-- AUTO ACCEPT
+local autoAccept = false
+
+local toggleHolder = Instance.new("Frame")
+toggleHolder.Parent = frame
+toggleHolder.Position = UDim2.new(1,-78,1,-86)
+toggleHolder.Size = UDim2.new(0,58,0,28)
+toggleHolder.BackgroundColor3 = Color3.fromRGB(50,20,40)
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.Parent = toggleHolder
+toggleCorner.CornerRadius = UDim.new(1,0)
+
+local toggleCircle = Instance.new("Frame")
+toggleCircle.Parent = toggleHolder
+toggleCircle.Size = UDim2.new(0,22,0,22)
+toggleCircle.Position = UDim2.new(0,3,0.5,-11)
+toggleCircle.BackgroundColor3 = Color3.new(1,1,1)
+
+local circleCorner = Instance.new("UICorner")
+circleCorner.Parent = toggleCircle
+circleCorner.CornerRadius = UDim.new(1,0)
+
+toggleHolder.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		autoAccept = not autoAccept
+
+		if autoAccept then
+			TweenService:Create(toggleCircle, TweenInfo.new(0.18,Enum.EasingStyle.Quint), {
+				Position = UDim2.new(1,-25,0.5,-11),
+				BackgroundColor3 = neonPink
+			}):Play()
+		else
+			TweenService:Create(toggleCircle, TweenInfo.new(0.18,Enum.EasingStyle.Quint), {
+				Position = UDim2.new(0,3,0.5,-11),
+				BackgroundColor3 = Color3.new(1,1,1)
+			}):Play()
+		end
+	end
+end)
+
+-- WEBSITE
+local website = Instance.new("TextButton")
+website.Parent = frame
+website.Size = UDim2.new(1,0,0,24)
+website.Position = UDim2.new(0,0,1,-35)
+website.BackgroundTransparency = 1
+website.Text = "t17ed.github.io"
+website.Font = Enum.Font.GothamBlack
+website.TextSize = 15
+website.TextColor3 = softPink
+
+website.MouseButton1Click:Connect(function()
+	pcall(function()
+		if setclipboard then
+			setclipboard("https://t17ed.github.io")
+		end
+	end)
+
+	showNotification("Copied to clipboard!", Color3.fromRGB(255,255,0))
+end)
+
+-- MINIMIZE
+local minimized = false
+
+minimize.MouseButton1Click:Connect(function()
+	minimized = not minimized
+
+	if minimized then
+		minimize.Text = "+"
+		TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quint), {
+			Size = UDim2.new(0,340,0,45)
+		}):Play()
+		buttonsHolder.Visible = false
+		toggleHolder.Visible = false
+		website.Visible = false
+	else
+		minimize.Text = "-"
+		buttonsHolder.Visible = true
+		toggleHolder.Visible = true
+		website.Visible = true
+		TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quint), {
+			Size = UDim2.new(0,340,0,360)
+		}):Play()
+	end
+end)
+
+-- KEYBIND
+UIS.InputBegan:Connect(function(input,gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.Backquote then
+		gui.Enabled = not gui.Enabled
+	end
+end)
 
 -- DRAGGING
 local dragging = false
 local dragStart
 local startPos
 
-title.InputBegan:Connect(function(input)
+topBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
 		dragStart = input.Position
@@ -398,7 +633,7 @@ title.InputBegan:Connect(function(input)
 	end
 end)
 
-title.InputEnded:Connect(function(input)
+topBar.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = false
 	end
@@ -407,7 +642,6 @@ end)
 UIS.InputChanged:Connect(function(input)
 	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 		local delta = input.Position - dragStart
-
 		frame.Position = UDim2.new(
 			startPos.X.Scale,
 			startPos.X.Offset + delta.X,
@@ -417,56 +651,106 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- UPDATE COUNT
-local function updateCount()
-	countBox.Text = tostring(#adminPanels)
+-- AUTO ACCEPT
+local readyFrame
+local readyButton
+
+local function findGui()
+	local gui = playerGui:FindFirstChild("TradeLiveTrade")
+	if not gui then return end
+
+	local main = gui:FindFirstChild("TradeLiveTrade")
+	if not main then return end
+
+	local other = main:FindFirstChild("Other")
+	if not other then return end
+
+	readyFrame = other:FindFirstChild("Ready")
+	readyButton = other:FindFirstChild("ReadyButton")
 end
 
--- SET COUNT
-local function setPanelCount(amount)
-	amount = math.max(0,amount)
+findGui()
 
-	while #adminPanels < amount do
-		createAdminPanel()
+playerGui.DescendantAdded:Connect(function(v)
+	if v.Name == "ReadyButton" or v.Name == "Ready" then
+		task.wait()
+		findGui()
 	end
+end)
 
-	while #adminPanels > amount do
-		local panel = table.remove(adminPanels)
+local function click(button)
+	if not button then return end
+	if not button.Visible then return end
+	if not button.Active then return end
 
-		if panel and panel.Parent then
-			panel:Destroy()
+	pcall(function()
+		button:Activate()
+	end)
+
+	pcall(function()
+		for _, c in ipairs(getconnections(button.Activated)) do
+			c:Fire()
+		end
+	end)
+
+	pcall(function()
+		for _, c in ipairs(getconnections(button.MouseButton1Click)) do
+			c:Fire()
+		end
+	end)
+end
+
+RunService.Heartbeat:Connect(function()
+	if not autoAccept then return end
+	if not readyFrame or not readyButton then return end
+	if readyFrame.Visible then
+		click(readyButton)
+		click(readyButton)
+		click(readyButton)
+	end
+end)
+
+-- =========================================================
+-- NEW FEATURE: ACCEPTED STATE FILTER (ADDED ONLY)
+-- =========================================================
+
+local function isAcceptedState()
+	local ok, txt = pcall(function()
+		return playerGui
+			:WaitForChild("TradeLiveTrade")
+			:WaitForChild("TradeLiveTrade")
+			:WaitForChild("Other")
+			:WaitForChild("ReadyButton")
+			:WaitForChild("Txt").Text
+	end)
+	return ok and txt == "ACCEPTED"
+end
+
+local function updateGreenStyleVisibility()
+	local accepted = isAcceptedState()
+
+	-- green style buttons = preset buttons (ImageButtons inside buttonsHolder)
+	for _, obj in ipairs(buttonsHolder:GetChildren()) do
+		if obj:IsA("ImageButton") then
+			obj.Visible = accepted
 		end
 	end
 
-	updateCount()
-end
-
--- BUTTONS
-addButton.MouseButton1Click:Connect(function()
-	createAdminPanel()
-	updateCount()
-end)
-
-removeButton.MouseButton1Click:Connect(function()
-	if #adminPanels > 0 then
-		local panel = table.remove(adminPanels)
-
-		if panel and panel.Parent then
-			panel:Destroy()
-		end
-	end
-
-	updateCount()
-end)
-
-countBox.FocusLost:Connect(function()
-	local num = tonumber(countBox.Text)
-
-	if num then
-		setPanelCount(num)
+	-- everything else should toggle based on state
+	if accepted then
+		-- hide non-green UI
+		toggleHolder.Visible = false
+		website.Visible = false
 	else
-		updateCount()
+		-- restore UI
+		toggleHolder.Visible = true
+		website.Visible = true
+	end
+end
+
+task.spawn(function()
+	while true do
+		updateGreenStyleVisibility()
+		task.wait(0.2)
 	end
 end)
-
-updateCount()
