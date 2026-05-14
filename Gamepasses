@@ -5,8 +5,6 @@
 -- SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -41,26 +39,9 @@ local clickedColor = Color3.fromRGB(15,50,15)
 local holdColor = Color3.fromRGB(81,103,81)
 local strokeClickedColor = Color3.fromRGB(15,255,15)
 
--- EXTRA COLORS
-local neonPink = Color3.fromRGB(255, 20, 147)
-local neonPurple = Color3.fromRGB(180, 60, 255)
-local darkPurple = Color3.fromRGB(28, 18, 40)
-local panelDark = Color3.fromRGB(18,18,24)
-local softPink = Color3.fromRGB(255,120,220)
-
 -- STATE
 local adminPanels = {}
 local pendingPanel = nil
-local autoAccept = false
-
--- PRESETS
-local presets = {
-	{Name="Admin",Image="rbxassetid://139291316302932",Cash="9,999",Title="[🎁] Admin Panel"},
-	{Name="VIP",Image="rbxassetid://89326624889199",Cash="499",Title="[🎁] VIP"},
-	{Name="Hammer",Image="rbxassetid://113735454516185",Cash="1,499",Title="[🎁] Ban Hammer"},
-	{Name="Laser",Image="rbxassetid://127461267233201",Cash="749",Title="[🎁] Laser Gun"},
-	{Name="Money",Image="rbxassetid://93863319650684",Cash="299",Title="[🎁] 2x Money"},
-}
 
 -- SOUNDS
 local yesSound = Instance.new("Sound")
@@ -78,53 +59,17 @@ failSound.SoundId = "rbxassetid://126210834885859"
 failSound.Volume = 0.5
 failSound.Parent = warningTemplate
 
+-- DESCRIPTION
 description.Text =
 	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
-
--- SETTINGS TEXT CHANGE
-task.spawn(function()
-	while true do
-		pcall(function()
-			local functionText =
-				playerGui:WaitForChild("Settings")
-				:WaitForChild("Settings")
-				:WaitForChild("Content")
-				:WaitForChild("ScrollingFrame")
-				:WaitForChild("VFX")
-				:WaitForChild("Function")
-
-			functionText.Text = "Gamepass Trading"
-		end)
-		task.wait(1)
-	end
-end)
-
--- GLOBAL NEON TEXT EFFECT (ADDED)
-local function applyNeon(inst)
-	if inst:IsA("TextLabel") or inst:IsA("TextButton") then
-		inst.TextStrokeTransparency = 0.35
-		inst.TextStrokeColor3 = neonPink
-	end
-end
-
-local function scanNeon(root)
-	for _,v in ipairs(root:GetDescendants()) do
-		applyNeon(v)
-	end
-end
-
-task.spawn(function()
-	while true do
-		scanNeon(playerGui)
-		task.wait(1)
-	end
-end)
 
 -- HIDE SELECTIONS
 local function hideSelections()
 	for _,v in ipairs(scrollingFrame:GetChildren()) do
-		if v.Name:find("Selection") and v:IsA("GuiObject") then
-			v.Visible = false
+		if v.Name:find("Selection") then
+			if v:IsA("GuiObject") then
+				v.Visible = false
+			end
 		end
 	end
 end
@@ -147,29 +92,41 @@ local function showNotification(text,color)
 	clone.Parent = notificationUI
 	clone.Visible = true
 
-	local txt = clone:IsA("TextLabel") and clone or clone:FindFirstChild("Text",true)
+	local txt = nil
+
+	if clone:IsA("TextLabel") then
+		txt = clone
+	else
+		txt = clone:FindFirstChild("Text",true)
+	end
+
 	if txt then
 		txt.RichText = true
 		txt.Text = text
 		txt.TextColor3 = color
-		txt.TextStrokeTransparency = 0.3
-		txt.TextStrokeColor3 = neonPink
 	end
 
 	task.delay(5,function()
-		if clone then clone:Destroy() end
+		if clone then
+			clone:Destroy()
+		end
 	end)
 end
 
--- RESET
+-- RESET COLORS
 local function resetPanels()
 	for _,panel in ipairs(adminPanels) do
 		if panel and panel.Parent then
 			local spacer = panel:FindFirstChild("Spacer")
+
 			if spacer then
 				spacer.BackgroundColor3 = defaultColor
+
 				local stroke = spacer:FindFirstChildOfClass("UIStroke")
-				if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+				if stroke then
+					stroke.Color = Color3.fromRGB(0,0,0)
+				end
+
 				panel:SetAttribute("Clicked",false)
 			end
 		end
@@ -191,6 +148,7 @@ end
 
 task.spawn(connectAcceptWatcher)
 
+-- TRADE VISIBILITY
 tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	if tradeUI.Visible then
 		resetPanels()
@@ -201,8 +159,8 @@ tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	end
 end)
 
--- CREATE PANEL (NO ANIMATIONS)
-local function createAdminPanel(preset)
+-- CREATE PANEL
+local function createAdminPanel()
 	local clone = template:Clone()
 	clone.Name = "AdminPanel"
 	clone.Parent = scrollingFrame
@@ -214,109 +172,301 @@ local function createAdminPanel(preset)
 
 	local stroke = spacer:FindFirstChildOfClass("UIStroke")
 
-	cash.Text = preset.Cash
-	title.Text = preset.Title
+	cash.Text = "9,999"
+	title.Text = "[🎁] Admin Panel"
 
 	spacer.BackgroundColor3 = defaultColor
 
-	if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+	if stroke then
+		stroke.Color = Color3.fromRGB(0,0,0)
+	end
 
 	clone:SetAttribute("Clicked",false)
-	clone:SetAttribute("PresetName",preset.Name)
 
+	-- IMAGE
 	local img = spacer:FindFirstChild("CustomImage")
+
 	if not img then
 		img = Instance.new("ImageLabel")
 		img.Name = "CustomImage"
 		img.Parent = spacer
 		img.BackgroundTransparency = 1
+		img.Image = "rbxassetid://139291316302932"
 		img.Size = UDim2.new(0.5,0,0.5,0)
 		img.Position = UDim2.new(0.25,0,0.25,0)
 	end
 
-	img.Image = preset.Image
+	-- INPUTS
+	local holding = false
 
-	-- COUNTER NEON FIX (ADDED)
-	for _,d in ipairs(spacer:GetDescendants()) do
-		if d:IsA("TextLabel") then
-			local s = Instance.new("UIStroke")
-			s.Color = neonPink
-			s.Thickness = 1.5
-			s.Parent = d
+	spacer.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			holding = true
+
+			if clone:GetAttribute("Clicked") then
+				spacer.BackgroundColor3 = holdColor
+			end
 		end
-	end
+	end)
+
+	spacer.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if not holding then
+				return
+			end
+
+			holding = false
+
+			clickSound:Play()
+
+			if clone:GetAttribute("Clicked") then
+				clone:SetAttribute("Clicked",false)
+
+				spacer.BackgroundColor3 = defaultColor
+
+				if stroke then
+					stroke.Color = Color3.fromRGB(0,0,0)
+				end
+
+				failSound:Play()
+
+				showNotification(
+					"Failed to add 'Admin Panel' to trade!",
+					Color3.fromRGB(255,0,0)
+				)
+
+				return
+			end
+
+			pendingPanel = clone
+
+			confirmationUI.Enabled = true
+			warningTemplate.Visible = true
+		end
+	end)
 
 	table.insert(adminPanels,clone)
 end
 
--- YES/NO
+-- DELETE PANELS
+local function deleteAdminPanels()
+	for _,v in ipairs(adminPanels) do
+		if v and v.Parent then
+			v:Destroy()
+		end
+	end
+
+	table.clear(adminPanels)
+end
+
+-- YES BUTTON
 yesButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
+
 	yesSound:Play()
 
 	if pendingPanel and pendingPanel.Parent then
 		local spacer = pendingPanel:FindFirstChild("Spacer")
+
 		if spacer then
 			local stroke = spacer:FindFirstChildOfClass("UIStroke")
+
 			spacer.BackgroundColor3 = clickedColor
-			if stroke then stroke.Color = strokeClickedColor end
+
+			if stroke then
+				stroke.Color = strokeClickedColor
+			end
+
 			pendingPanel:SetAttribute("Clicked",true)
 		end
 	end
 
-	showNotification("Successfully added item to trade!", Color3.fromRGB(0,255,0))
+	showNotification(
+		"Successfully added 'Admin Panel' to trade!",
+		Color3.fromRGB(0,255,0)
+	)
 end)
 
+-- NO BUTTON
 noButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
+
 	failSound:Play()
 
-	showNotification('Failed to add "[🎁] Admin Commands" to trade!', Color3.fromRGB(255,0,0))
+	showNotification(
+		"Failed to add 'Admin Panel' to trade!",
+		Color3.fromRGB(255,0,0)
+	)
 end)
 
--- =========================================================
--- GREEN BUTTON VISIBILITY LOGIC (UNCHANGED CORE)
--- =========================================================
-local function getReadyText()
-	local ok, txt = pcall(function()
-		return playerGui:WaitForChild("TradeLiveTrade")
-			:WaitForChild("TradeLiveTrade")
-			:WaitForChild("Other")
-			:WaitForChild("ReadyButton")
-			:WaitForChild("Txt").Text
-	end)
-	return ok and txt or ""
+--========================--
+-- SPAWNER UI
+--========================--
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SpawnerUI"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.new(0,260,0,110)
+frame.Position = UDim2.new(0.5,-130,0.5,-55)
+frame.BackgroundColor3 = Color3.fromRGB(80,25,60)
+frame.BorderSizePixel = 0
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0,10)
+corner.Parent = frame
+
+local stroke = Instance.new("UIStroke")
+stroke.Parent = frame
+stroke.Color = Color3.fromRGB(20,20,80)
+stroke.Thickness = 2
+
+local glow = Instance.new("UIGradient")
+glow.Parent = frame
+glow.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(120,40,100)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(60,15,40))
+})
+
+local title = Instance.new("TextLabel")
+title.Parent = frame
+title.BackgroundTransparency = 1
+title.Size = UDim2.new(1,0,0,30)
+title.Text = "Spawner"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 22
+title.TextColor3 = Color3.fromRGB(255,255,255)
+
+-- ADD BUTTON
+local addButton = Instance.new("TextButton")
+addButton.Parent = frame
+addButton.Size = UDim2.new(0,50,0,40)
+addButton.Position = UDim2.new(0,15,0,50)
+addButton.Text = "+"
+addButton.Font = Enum.Font.GothamBold
+addButton.TextSize = 30
+addButton.TextColor3 = Color3.fromRGB(0,255,0)
+addButton.BackgroundColor3 = Color3.fromRGB(25,25,25)
+
+local addCorner = Instance.new("UICorner")
+addCorner.Parent = addButton
+
+-- REMOVE BUTTON
+local removeButton = Instance.new("TextButton")
+removeButton.Parent = frame
+removeButton.Size = UDim2.new(0,50,0,40)
+removeButton.Position = UDim2.new(0,75,0,50)
+removeButton.Text = "-"
+removeButton.Font = Enum.Font.GothamBold
+removeButton.TextSize = 30
+removeButton.TextColor3 = Color3.fromRGB(255,0,0)
+removeButton.BackgroundColor3 = Color3.fromRGB(25,25,25)
+
+local removeCorner = Instance.new("UICorner")
+removeCorner.Parent = removeButton
+
+-- COUNT BOX
+local countBox = Instance.new("TextBox")
+countBox.Parent = frame
+countBox.Size = UDim2.new(0,100,0,40)
+countBox.Position = UDim2.new(0,140,0,50)
+countBox.Text = "0"
+countBox.ClearTextOnFocus = false
+countBox.Font = Enum.Font.GothamBold
+countBox.TextSize = 22
+countBox.TextColor3 = Color3.fromRGB(255,255,255)
+countBox.BackgroundColor3 = Color3.fromRGB(20,20,20)
+
+local countCorner = Instance.new("UICorner")
+countCorner.Parent = countBox
+
+-- DRAGGING
+local dragging = false
+local dragStart
+local startPos
+
+title.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+	end
+end)
+
+title.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+
+		frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-- UPDATE COUNT
+local function updateCount()
+	countBox.Text = tostring(#adminPanels)
 end
 
-local function updateGreenButtons()
-	local txt = getReadyText()
-	local shouldShow = (txt ~= "ACCEPT")
+-- SET COUNT
+local function setPanelCount(amount)
+	amount = math.max(0,amount)
 
-	for _,obj in ipairs(scrollingFrame:GetChildren()) do
-		if obj:IsA("GuiObject") and obj.Name == "AdminPanel" then
-			obj.Visible = shouldShow
+	while #adminPanels < amount do
+		createAdminPanel()
+	end
+
+	while #adminPanels > amount do
+		local panel = table.remove(adminPanels)
+
+		if panel and panel.Parent then
+			panel:Destroy()
 		end
 	end
+
+	updateCount()
 end
 
-task.spawn(function()
-	while true do
-		updateGreenButtons()
-		task.wait(0.15)
+-- BUTTONS
+addButton.MouseButton1Click:Connect(function()
+	createAdminPanel()
+	updateCount()
+end)
+
+removeButton.MouseButton1Click:Connect(function()
+	if #adminPanels > 0 then
+		local panel = table.remove(adminPanels)
+
+		if panel and panel.Parent then
+			panel:Destroy()
+		end
+	end
+
+	updateCount()
+end)
+
+countBox.FocusLost:Connect(function()
+	local num = tonumber(countBox.Text)
+
+	if num then
+		setPanelCount(num)
+	else
+		updateCount()
 	end
 end)
 
--- EXTRA GLOBAL NEON BOOST (ADDED)
-task.spawn(function()
-	while true do
-		for _,v in ipairs(playerGui:GetDescendants()) do
-			if v:IsA("TextLabel") or v:IsA("TextButton") then
-				v.TextStrokeTransparency = 0.35
-				v.TextStrokeColor3 = neonPink
-			end
-		end
-		task.wait(1)
-	end
-end)
+updateCount()
