@@ -49,6 +49,9 @@ local notificationCooldown = {}
 
 local acceptProcessed = false
 
+local keybindEnabled = false
+local keybindKey = Enum.KeyCode.G
+
 local presets = {
 	{ Name = "Admin", Image = "rbxassetid://139291316302932", Cash = "9,999", Title = "[🎁] Admin Panel" },
 	{ Name = "VIP", Image = "rbxassetid://89326624889199", Cash = "499", Title = "[🎁] VIP" },
@@ -56,6 +59,20 @@ local presets = {
 	{ Name = "Laser", Image = "rbxassetid://127461267233201", Cash = "749", Title = "[🎁] Laser Gun" },
 	{ Name = "Money", Image = "rbxassetid://93863319650684", Cash = "299", Title = "[🎁] 2x Money" },
 }
+
+pcall(function()
+	if isfile and readfile and writefile then
+		if isfile("t17ed_keybind.txt") then
+			local saved = readfile("t17ed_keybind.txt")
+
+			if saved == "true" then
+				keybindEnabled = true
+			end
+		else
+			writefile("t17ed_keybind.txt","false")
+		end
+	end
+end)
 
 local function playSound(id, volume)
 	local sound = Instance.new("Sound")
@@ -68,10 +85,6 @@ end
 
 local function neonText(obj)
 	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-		local existing = obj:FindFirstChild("Glow")
-		if existing then
-			existing:Destroy()
-		end
 
 		local glow = Instance.new("UIStroke")
 		glow.Name = "Glow"
@@ -161,14 +174,18 @@ local function hideSelections()
 end
 
 scrollingFrame.ChildAdded:Connect(function()
+
 	task.wait()
+
 	hideSelections()
 end)
 
 task.spawn(function()
 
 	while true do
+
 		hideSelections()
+
 		task.wait(0.03)
 	end
 end)
@@ -186,6 +203,7 @@ local function showNotification(text,color)
 	end)
 
 	local clone = notifTemplate:Clone()
+
 	clone.Parent = notificationUI
 	clone.Visible = true
 
@@ -734,47 +752,97 @@ end)
 
 local speedBox = Instance.new("TextBox")
 speedBox.Parent = frame
-speedBox.Size = UDim2.new(0,180,0,34)
-speedBox.Position = UDim2.new(0.5,-90,1,-70)
-speedBox.BackgroundColor3 = Color3.fromRGB(35,20,35)
-speedBox.BorderSizePixel = 0
-speedBox.ClearTextOnFocus = false
-speedBox.Text = "25..."
-speedBox.PlaceholderText = "25..."
-speedBox.Font = Enum.Font.GothamBlack
-speedBox.TextSize = 18
+speedBox.Size = UDim2.new(0,150,0,34)
+speedBox.Position = UDim2.new(0.5,-105,1,-72)
+speedBox.BackgroundColor3 = Color3.fromRGB(40,20,40)
 speedBox.TextColor3 = Color3.new(1,1,1)
+speedBox.PlaceholderText = "25..."
+speedBox.Text = "25..."
+speedBox.ClearTextOnFocus = true
+speedBox.Font = Enum.Font.GothamBlack
+speedBox.TextSize = 16
+speedBox.BorderSizePixel = 0
 
 local speedCorner = Instance.new("UICorner")
 speedCorner.Parent = speedBox
-speedCorner.CornerRadius = UDim.new(0,10)
+speedCorner.CornerRadius = UDim.new(0,12)
 
 neonText(speedBox)
 
 speedBox.FocusLost:Connect(function()
 
-	local text = tostring(speedBox.Text)
+	local text = speedBox.Text:gsub("%.","")
 
-	text = text:gsub("%.","")
-	text = text:gsub("%D","")
+	local number = tonumber(text)
 
-	local num = tonumber(text)
-
-	if not num then
-		num = 25
+	if not number then
+		number = 25
 	end
 
-	if num < 25 then
-		num = 25
+	if number < 25 then
+		number = 25
 	end
 
-	if num > 500 then
-		num = 500
+	if number > 500 then
+		number = 500
 	end
 
-	acceptSpeed = num
+	acceptSpeed = number
 
-	speedBox.Text = tostring(num).."..."
+	speedBox.Text = tostring(number).."..."
+end)
+
+local keybindCircle = Instance.new("TextButton")
+keybindCircle.Parent = frame
+keybindCircle.Size = UDim2.new(0,34,0,34)
+keybindCircle.Position = UDim2.new(0.5,60,1,-72)
+keybindCircle.Text = "K"
+keybindCircle.Font = Enum.Font.GothamBlack
+keybindCircle.TextSize = 16
+keybindCircle.TextColor3 = Color3.new(1,1,1)
+keybindCircle.BackgroundColor3 = keybindEnabled and neonPink or Color3.fromRGB(40,20,40)
+keybindCircle.BorderSizePixel = 0
+
+local keybindCorner = Instance.new("UICorner")
+keybindCorner.Parent = keybindCircle
+keybindCorner.CornerRadius = UDim.new(1,0)
+
+neonText(keybindCircle)
+
+keybindCircle.MouseButton1Click:Connect(function()
+
+	keybindEnabled = not keybindEnabled
+
+	keybindCircle.BackgroundColor3 = keybindEnabled and neonPink or Color3.fromRGB(40,20,40)
+
+	pcall(function()
+
+		if writefile then
+			writefile("t17ed_keybind.txt", tostring(keybindEnabled))
+		end
+	end)
+end)
+
+UIS.InputBegan:Connect(function(input,gpe)
+
+	if gpe then
+		return
+	end
+
+	if keybindEnabled and input.KeyCode == keybindKey then
+		autoAccept = not autoAccept
+
+		if autoAccept then
+
+			toggleCircle.Position = UDim2.new(1,-25,0.5,-11)
+			toggleCircle.BackgroundColor3 = neonPink
+
+		else
+
+			toggleCircle.Position = UDim2.new(0,3,0.5,-11)
+			toggleCircle.BackgroundColor3 = Color3.new(1,1,1)
+		end
+	end
 end)
 
 local website = Instance.new("TextButton")
@@ -792,6 +860,7 @@ neonText(website)
 website.MouseButton1Click:Connect(function()
 
 	pcall(function()
+
 		if setclipboard then
 			setclipboard("https://t17ed.github.io")
 		end
@@ -826,6 +895,7 @@ minimize.MouseButton1Click:Connect(function()
 		autoText.Visible = false
 		website.Visible = false
 		speedBox.Visible = false
+		keybindCircle.Visible = false
 
 	else
 
@@ -836,6 +906,7 @@ minimize.MouseButton1Click:Connect(function()
 		autoText.Visible = true
 		website.Visible = true
 		speedBox.Visible = true
+		keybindCircle.Visible = true
 
 		TweenService:Create(
 			frame,
