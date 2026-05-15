@@ -67,7 +67,12 @@ local function playSound(id, volume)
 end
 
 local function neonText(obj)
-	if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+		local existing = obj:FindFirstChild("Glow")
+		if existing then
+			existing:Destroy()
+		end
+
 		local glow = Instance.new("UIStroke")
 		glow.Name = "Glow"
 		glow.Parent = obj
@@ -79,11 +84,13 @@ end
 description.Text = "The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
 local function tweenHover(button)
+
 	local scale = Instance.new("UIScale")
 	scale.Scale = 1
 	scale.Parent = button
 
 	button.MouseEnter:Connect(function()
+
 		TweenService:Create(
 			scale,
 			TweenInfo.new(0.08,Enum.EasingStyle.Quint),
@@ -94,6 +101,7 @@ local function tweenHover(button)
 	end)
 
 	button.MouseLeave:Connect(function()
+
 		TweenService:Create(
 			scale,
 			TweenInfo.new(0.08,Enum.EasingStyle.Quint),
@@ -108,9 +116,11 @@ tweenHover(yesButton)
 tweenHover(noButton)
 
 task.spawn(function()
+
 	local connected = false
 
 	while true do
+
 		pcall(function()
 
 			local functionText = playerGui
@@ -124,9 +134,11 @@ task.spawn(function()
 			functionText.Text = "Gamepass Trading"
 
 			if not connected then
+
 				connected = true
 
 				functionText:GetPropertyChangedSignal("Text"):Connect(function()
+
 					if functionText.Text ~= "Gamepass Trading" then
 						functionText.Text = "Gamepass Trading"
 					end
@@ -139,7 +151,9 @@ task.spawn(function()
 end)
 
 local function hideSelections()
+
 	for _,v in ipairs(scrollingFrame:GetChildren()) do
+
 		if v.Name:find("Selection") and v:IsA("GuiObject") then
 			v.Visible = false
 		end
@@ -152,6 +166,7 @@ scrollingFrame.ChildAdded:Connect(function()
 end)
 
 task.spawn(function()
+
 	while true do
 		hideSelections()
 		task.wait(0.03)
@@ -307,6 +322,7 @@ local function createAdminPanel(preset)
 	local img = spacer:FindFirstChild("CustomImage")
 
 	if not img then
+
 		img = Instance.new("ImageLabel")
 		img.Name = "CustomImage"
 		img.Parent = spacer
@@ -716,86 +732,49 @@ toggleHolder.InputBegan:Connect(function(input)
 	end
 end)
 
-local sliderFrame = Instance.new("Frame")
-sliderFrame.Parent = frame
-sliderFrame.Size = UDim2.new(0,240,0,8)
-sliderFrame.Position = UDim2.new(0.5,-120,1,-62)
-sliderFrame.BackgroundColor3 = Color3.fromRGB(45,20,40)
+local speedBox = Instance.new("TextBox")
+speedBox.Parent = frame
+speedBox.Size = UDim2.new(0,180,0,34)
+speedBox.Position = UDim2.new(0.5,-90,1,-70)
+speedBox.BackgroundColor3 = Color3.fromRGB(35,20,35)
+speedBox.BorderSizePixel = 0
+speedBox.ClearTextOnFocus = false
+speedBox.Text = "25..."
+speedBox.PlaceholderText = "25..."
+speedBox.Font = Enum.Font.GothamBlack
+speedBox.TextSize = 18
+speedBox.TextColor3 = Color3.new(1,1,1)
 
-local sliderCorner = Instance.new("UICorner")
-sliderCorner.Parent = sliderFrame
-sliderCorner.CornerRadius = UDim.new(1,0)
+local speedCorner = Instance.new("UICorner")
+speedCorner.Parent = speedBox
+speedCorner.CornerRadius = UDim.new(0,10)
 
-local sliderFill = Instance.new("Frame")
-sliderFill.Parent = sliderFrame
-sliderFill.Size = UDim2.new(0,0,1,0)
-sliderFill.BackgroundColor3 = neonPink
+neonText(speedBox)
 
-local fillCorner = Instance.new("UICorner")
-fillCorner.Parent = sliderFill
-fillCorner.CornerRadius = UDim.new(1,0)
+speedBox.FocusLost:Connect(function()
 
-local knob = Instance.new("Frame")
-knob.Parent = sliderFrame
-knob.AnchorPoint = Vector2.new(0.5,0.5)
-knob.Position = UDim2.new(0,0,0.5,0)
-knob.Size = UDim2.new(0,18,0,18)
-knob.BackgroundColor3 = Color3.new(1,1,1)
+	local text = tostring(speedBox.Text)
 
-local knobCorner = Instance.new("UICorner")
-knobCorner.Parent = knob
-knobCorner.CornerRadius = UDim.new(1,0)
+	text = text:gsub("%.","")
+	text = text:gsub("%D","")
 
-local speedText = Instance.new("TextLabel")
-speedText.Parent = frame
-speedText.BackgroundTransparency = 1
-speedText.Position = UDim2.new(0,0,1,-52)
-speedText.Size = UDim2.new(1,0,0,20)
-speedText.Text = "Speed # ~25 times/sec"
-speedText.Font = Enum.Font.GothamBold
-speedText.TextSize = 13
-speedText.TextColor3 = Color3.new(1,1,1)
+	local num = tonumber(text)
 
-neonText(speedText)
-
-local draggingSlider = false
-
-local function updateSlider(x)
-
-	local percent = math.clamp(
-		(x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X,
-		0,
-		1
-	)
-
-	sliderFill.Size = UDim2.new(percent,0,1,0)
-
-	knob.Position = UDim2.new(percent,0,0.5,0)
-
-	acceptSpeed = math.floor(25 + (percent * 475))
-
-	speedText.Text = "Speed # ~"..acceptSpeed.." times/sec"
-end
-
-updateSlider(sliderFrame.AbsolutePosition.X)
-
-knob.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		draggingSlider = true
+	if not num then
+		num = 25
 	end
-end)
 
-UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		draggingSlider = false
+	if num < 25 then
+		num = 25
 	end
-end)
 
-UIS.InputChanged:Connect(function(input)
-
-	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-		updateSlider(input.Position.X)
+	if num > 500 then
+		num = 500
 	end
+
+	acceptSpeed = num
+
+	speedBox.Text = tostring(num).."..."
 end)
 
 local website = Instance.new("TextButton")
@@ -846,8 +825,7 @@ minimize.MouseButton1Click:Connect(function()
 		toggleHolder.Visible = false
 		autoText.Visible = false
 		website.Visible = false
-		sliderFrame.Visible = false
-		speedText.Visible = false
+		speedBox.Visible = false
 
 	else
 
@@ -857,8 +835,7 @@ minimize.MouseButton1Click:Connect(function()
 		toggleHolder.Visible = true
 		autoText.Visible = true
 		website.Visible = true
-		sliderFrame.Visible = true
-		speedText.Visible = true
+		speedBox.Visible = true
 
 		TweenService:Create(
 			frame,
@@ -1011,8 +988,6 @@ local function processAccept()
 			end
 		end
 
-		task.wait(0.1)
-
 		for _,panel in ipairs(adminPanels) do
 
 			if panel and panel.Parent then
@@ -1047,6 +1022,6 @@ task.spawn(function()
 
 		pcall(processAccept)
 
-		task.wait(0.1)
+		task.wait()
 	end
 end)
