@@ -1,8 +1,3 @@
---// ADMIN PANEL SPAWNER
---// FULL RECREATED SCRIPT
---// LocalScript
-
--- SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -11,49 +6,42 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- TRADE UI
 local tradeUI = playerGui:WaitForChild("TradeLiveTrade"):WaitForChild("TradeLiveTrade")
 local yourFrame = tradeUI:WaitForChild("Your")
 local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
-
 local template = scrollingFrame:WaitForChild("Template")
+
 template.Visible = false
 
--- CONFIRMATION UI
 local confirmationUI = playerGui:WaitForChild("Confirmation")
 local warningTemplate = confirmationUI:WaitForChild("WarningTemplate")
-
 local content = warningTemplate:WaitForChild("Content")
 local description = content:WaitForChild("Description")
-
 local yesButton = warningTemplate:WaitForChild("Yes")
 local noButton = warningTemplate:WaitForChild("No")
 
--- NOTIFICATIONS
 local notificationRoot = playerGui:WaitForChild("Notification")
 local notificationUI = notificationRoot:WaitForChild("Notification")
-
 local notifTemplate = notificationUI:WaitForChild("Template")
 
--- COLORS
 local defaultColor = Color3.fromRGB(35,45,50)
 local clickedColor = Color3.fromRGB(15,50,15)
 local holdColor = Color3.fromRGB(81,103,81)
 local strokeClickedColor = Color3.fromRGB(15,255,15)
 
--- EXTRA COLORS
 local neonPink = Color3.fromRGB(255, 20, 147)
 local neonPurple = Color3.fromRGB(180, 60, 255)
 local darkPurple = Color3.fromRGB(28, 18, 40)
 local panelDark = Color3.fromRGB(18,18,24)
 local softPink = Color3.fromRGB(255,120,220)
 
--- STATE
 local adminPanels = {}
 local pendingPanel = nil
-local autoAccept = false
 
--- PRESETS
+local autoAccept = false
+local acceptSpeed = 25
+local lastAccept = 0
+
 local presets = {
 	{
 		Name = "Admin",
@@ -87,7 +75,29 @@ local presets = {
 	},
 }
 
--- SOUNDS
+local function makeNeonText(obj,color)
+	local stroke = obj:FindFirstChildOfClass("UIStroke")
+
+	if not stroke then
+		stroke = Instance.new("UIStroke")
+		stroke.Parent = obj
+	end
+
+	stroke.Thickness = 2.4
+	stroke.Color = color or neonPink
+	stroke.Transparency = 0
+
+	local glow = obj:FindFirstChild("Glow")
+
+	if not glow then
+		glow = Instance.new("UIGradient")
+		glow.Name = "Glow"
+		glow.Parent = obj
+	end
+
+	obj.TextColor3 = Color3.new(1,1,1)
+end
+
 local yesSound = Instance.new("Sound")
 yesSound.SoundId = "rbxassetid://83245966620103"
 yesSound.Volume = 0.5
@@ -103,16 +113,14 @@ failSound.SoundId = "rbxassetid://126210834885859"
 failSound.Volume = 0.5
 failSound.Parent = warningTemplate
 
--- DESCRIPTION
-description.Text =
-	"The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
+description.Text = "The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
--- SETTINGS TEXT CHANGE
 task.spawn(function()
+	local connected = false
+
 	while true do
 		pcall(function()
-			local functionText =
-				playerGui
+			local functionText = playerGui
 				:WaitForChild("Settings")
 				:WaitForChild("Settings")
 				:WaitForChild("Content")
@@ -121,12 +129,22 @@ task.spawn(function()
 				:WaitForChild("Function")
 
 			functionText.Text = "Gamepass Trading"
+
+			if not connected then
+				connected = true
+
+				functionText:GetPropertyChangedSignal("Text"):Connect(function()
+					if functionText.Text ~= "Gamepass Trading" then
+						functionText.Text = "Gamepass Trading"
+					end
+				end)
+			end
 		end)
-		task.wait(1)
+
+		task.wait()
 	end
 end)
 
--- HIDE SELECTIONS
 local function hideSelections()
 	for _,v in ipairs(scrollingFrame:GetChildren()) do
 		if v.Name:find("Selection") then
@@ -145,13 +163,13 @@ end)
 task.spawn(function()
 	while true do
 		hideSelections()
-		task.wait(0.05)
+		task.wait(0.03)
 	end
 end)
 
--- NOTIFICATION
 local function showNotification(text,color)
 	local clone = notifTemplate:Clone()
+
 	clone.Parent = notificationUI
 	clone.Visible = true
 
@@ -167,16 +185,41 @@ local function showNotification(text,color)
 		txt.RichText = true
 		txt.Text = text
 		txt.TextColor3 = color
+
+		makeNeonText(txt,color)
 	end
 
-	task.delay(5,function()
+	local originalPos = clone.Position
+
+	clone.Position = originalPos + UDim2.new(0,300,0,0)
+
+	TweenService:Create(
+		clone,
+		TweenInfo.new(0.35,Enum.EasingStyle.Quint),
+		{
+			Position = originalPos
+		}
+	):Play()
+
+	task.delay(6,function()
 		if clone then
-			clone:Destroy()
+			TweenService:Create(
+				clone,
+				TweenInfo.new(0.25),
+				{
+					BackgroundTransparency = 1
+				}
+			):Play()
+
+			task.wait(0.25)
+
+			if clone then
+				clone:Destroy()
+			end
 		end
 	end)
 end
 
--- RESET COLORS
 local function resetPanels()
 	for _,panel in ipairs(adminPanels) do
 		if panel and panel.Parent then
@@ -186,6 +229,7 @@ local function resetPanels()
 				spacer.BackgroundColor3 = defaultColor
 
 				local stroke = spacer:FindFirstChildOfClass("UIStroke")
+
 				if stroke then
 					stroke.Color = Color3.fromRGB(0,0,0)
 				end
@@ -196,14 +240,13 @@ local function resetPanels()
 	end
 end
 
--- ACCEPT CHECK
 local function connectAcceptWatcher()
 	local other = tradeUI:WaitForChild("Other")
 	local readyButton = other:WaitForChild("ReadyButton")
 	local txt = readyButton:WaitForChild("Txt")
 
 	txt:GetPropertyChangedSignal("Text"):Connect(function()
-		if txt.Text == "ACCEPT" then
+		if txt.Text == "ACCEPTED" then
 			resetPanels()
 		end
 	end)
@@ -211,7 +254,6 @@ end
 
 task.spawn(connectAcceptWatcher)
 
--- TRADE VISIBILITY
 tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	if tradeUI.Visible then
 		resetPanels()
@@ -222,9 +264,9 @@ tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
 	end
 end)
 
--- CREATE PANEL
 local function createAdminPanel(preset)
 	local clone = template:Clone()
+
 	clone.Name = "AdminPanel"
 	clone.Parent = scrollingFrame
 	clone.Visible = true
@@ -232,11 +274,13 @@ local function createAdminPanel(preset)
 	local spacer = clone:WaitForChild("Spacer")
 	local cash = spacer:WaitForChild("Cash")
 	local title = spacer:WaitForChild("Title")
-
 	local stroke = spacer:FindFirstChildOfClass("UIStroke")
 
 	cash.Text = preset.Cash
 	title.Text = preset.Title
+
+	makeNeonText(cash,neonPink)
+	makeNeonText(title,neonPurple)
 
 	spacer.BackgroundColor3 = defaultColor
 
@@ -251,6 +295,7 @@ local function createAdminPanel(preset)
 
 	if not img then
 		img = Instance.new("ImageLabel")
+
 		img.Name = "CustomImage"
 		img.Parent = spacer
 		img.BackgroundTransparency = 1
@@ -260,27 +305,13 @@ local function createAdminPanel(preset)
 
 	img.Image = preset.Image
 
-	local holding = false
-
 	spacer.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			holding = true
-
-			if clone:GetAttribute("Clicked") then
-				spacer.BackgroundColor3 = holdColor
-			end
-		end
-	end)
-
-	spacer.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			if not holding then return end
-			holding = false
-
 			clickSound:Play()
 
 			if clone:GetAttribute("Clicked") then
 				clone:SetAttribute("Clicked",false)
+
 				spacer.BackgroundColor3 = defaultColor
 
 				if stroke then
@@ -290,7 +321,7 @@ local function createAdminPanel(preset)
 				failSound:Play()
 
 				showNotification(
-					"Removed "..preset.Title,
+					'Removed "'..preset.Title..'" from the trade!',
 					Color3.fromRGB(255,0,0)
 				)
 
@@ -298,6 +329,7 @@ local function createAdminPanel(preset)
 			end
 
 			pendingPanel = clone
+
 			confirmationUI.Enabled = true
 			warningTemplate.Visible = true
 		end
@@ -306,7 +338,6 @@ local function createAdminPanel(preset)
 	table.insert(adminPanels,clone)
 end
 
--- COUNTS
 local function getVisibleCount(name)
 	local count = 0
 
@@ -321,10 +352,10 @@ local function getVisibleCount(name)
 	return count
 end
 
--- REMOVE PANEL
 local function removePreset(name)
 	for i = #adminPanels,1,-1 do
 		local panel = adminPanels[i]
+
 		if panel and panel.Parent then
 			if panel:GetAttribute("PresetName") == name then
 				panel:Destroy()
@@ -335,7 +366,6 @@ local function removePreset(name)
 	end
 end
 
--- YES BUTTON
 yesButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -344,6 +374,7 @@ yesButton.MouseButton1Click:Connect(function()
 
 	if pendingPanel and pendingPanel.Parent then
 		local spacer = pendingPanel:FindFirstChild("Spacer")
+
 		if spacer then
 			local stroke = spacer:FindFirstChildOfClass("UIStroke")
 
@@ -363,7 +394,6 @@ yesButton.MouseButton1Click:Connect(function()
 	)
 end)
 
--- NO BUTTON (UPDATED MESSAGE RULE REQUEST)
 noButton.MouseButton1Click:Connect(function()
 	warningTemplate.Visible = false
 	confirmationUI.Enabled = false
@@ -371,12 +401,11 @@ noButton.MouseButton1Click:Connect(function()
 	failSound:Play()
 
 	showNotification(
-		'Failed to add "[🎁] Admin Commands" to trade!',
+		"Failed to add item to trade!",
 		Color3.fromRGB(255,0,0)
 	)
 end)
 
--- UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "SpawnerUI"
 gui.ResetOnSpawn = false
@@ -390,22 +419,46 @@ frame.Size = UDim2.new(0,340,0,360)
 frame.Position = UDim2.new(0.5,-170,0.5,-180)
 frame.BackgroundColor3 = panelDark
 frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0,14)
 corner.Parent = frame
+
+local gradient = Instance.new("UIGradient")
+gradient.Parent = frame
+gradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, darkPurple),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(45,20,60))
+})
 
 local stroke = Instance.new("UIStroke")
 stroke.Parent = frame
 stroke.Color = neonPink
 stroke.Thickness = 2
 
--- TOPBAR
+frame.Size = UDim2.new(0,0,0,0)
+frame.Position = UDim2.new(0.5,0,0.5,0)
+
+TweenService:Create(
+	frame,
+	TweenInfo.new(0.45,Enum.EasingStyle.Back,Enum.EasingDirection.Out),
+	{
+		Size = UDim2.new(0,340,0,430),
+		Position = UDim2.new(0.5,-170,0.5,-215)
+	}
+):Play()
+
 local topBar = Instance.new("Frame")
 topBar.Parent = frame
 topBar.Size = UDim2.new(1,0,0,42)
 topBar.BackgroundColor3 = Color3.fromRGB(30,30,40)
 topBar.BorderSizePixel = 0
+
+local topStroke = Instance.new("UIStroke")
+topStroke.Parent = topBar
+topStroke.Color = neonPurple
+topStroke.Thickness = 1.5
 
 local topCorner = Instance.new("UICorner")
 topCorner.CornerRadius = UDim.new(0,14)
@@ -415,30 +468,48 @@ local title = Instance.new("TextLabel")
 title.Parent = topBar
 title.BackgroundTransparency = 1
 title.Position = UDim2.new(0,12,0,0)
-title.Size = UDim2.new(1,-60,1,0)
+title.Size = UDim2.new(1,-100,1,0)
 title.Font = Enum.Font.GothamBlack
 title.Text = "t17ed's Spawner"
 title.TextColor3 = Color3.new(1,1,1)
 title.TextSize = 20
 title.TextXAlignment = Enum.TextXAlignment.Left
 
-local titleStroke = Instance.new("UIStroke")
-titleStroke.Parent = title
-titleStroke.Thickness = 2
-titleStroke.Color = neonPink
+makeNeonText(title,neonPink)
 
 local minimize = Instance.new("TextButton")
 minimize.Parent = topBar
 minimize.Size = UDim2.new(0,28,0,28)
-minimize.Position = UDim2.new(1,-36,0.5,-14)
+minimize.Position = UDim2.new(1,-72,0.5,-14)
 minimize.Text = "-"
 minimize.Font = Enum.Font.GothamBlack
 minimize.TextSize = 22
 minimize.TextColor3 = Color3.new(1,1,1)
 minimize.BackgroundColor3 = neonPurple
 
+makeNeonText(minimize,neonPink)
+
 local minCorner = Instance.new("UICorner")
 minCorner.Parent = minimize
+
+local closeButton = Instance.new("TextButton")
+closeButton.Parent = topBar
+closeButton.Size = UDim2.new(0,28,0,28)
+closeButton.Position = UDim2.new(1,-36,0.5,-14)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.GothamBlack
+closeButton.TextSize = 18
+closeButton.TextColor3 = Color3.new(1,1,1)
+closeButton.BackgroundColor3 = Color3.fromRGB(255,40,80)
+
+makeNeonText(closeButton,neonPink)
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+	gui:Destroy()
+end)
 
 local buttonsHolder = Instance.new("Frame")
 buttonsHolder.Parent = frame
@@ -451,14 +522,16 @@ grid.Parent = buttonsHolder
 grid.CellSize = UDim2.new(0,95,0,95)
 grid.CellPadding = UDim2.new(0,10,0,10)
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+grid.VerticalAlignment = Enum.VerticalAlignment.Center
 
--- PRESET BUTTONS
 for _,preset in ipairs(presets) do
 	local button = Instance.new("ImageButton")
+
 	button.Parent = buttonsHolder
 	button.Image = preset.Image
 	button.BackgroundColor3 = Color3.fromRGB(45,45,60)
 	button.BorderSizePixel = 0
+	button.ScaleType = Enum.ScaleType.Fit
 
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.Parent = button
@@ -478,10 +551,7 @@ for _,preset in ipairs(presets) do
 	label.TextSize = 12
 	label.TextColor3 = Color3.new(1,1,1)
 
-	local labelStroke = Instance.new("UIStroke")
-	labelStroke.Parent = label
-	labelStroke.Thickness = 1.5
-	labelStroke.Color = Color3.new(0,0,0)
+	makeNeonText(label,neonPink)
 
 	local counter = Instance.new("TextLabel")
 	counter.Parent = button
@@ -495,20 +565,61 @@ for _,preset in ipairs(presets) do
 	counter.TextSize = 13
 	counter.TextColor3 = Color3.new(1,1,1)
 
+	makeNeonText(counter,neonPink)
+
 	local counterCorner = Instance.new("UICorner")
 	counterCorner.Parent = counter
 
 	local counterStroke = Instance.new("UIStroke")
 	counterStroke.Parent = counter
-	counterStroke.Color = Color3.new(1,1,1)
+	counterStroke.Color = neonPink
+	counterStroke.Thickness = 2
+
+	local uiScale = Instance.new("UIScale")
+	uiScale.Parent = button
+	uiScale.Scale = 1
 
 	local function flash(color)
-		local tween1 = TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = color})
-		local tween2 = TweenService:Create(button, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(45,45,60)})
+		local tween1 = TweenService:Create(
+			button,
+			TweenInfo.new(0.08),
+			{
+				BackgroundColor3 = color
+			}
+		)
+
+		local tween2 = TweenService:Create(
+			button,
+			TweenInfo.new(0.12),
+			{
+				BackgroundColor3 = Color3.fromRGB(45,45,60)
+			}
+		)
+
 		tween1:Play()
 		tween1.Completed:Wait()
 		tween2:Play()
 	end
+
+	button.MouseEnter:Connect(function()
+		TweenService:Create(
+			uiScale,
+			TweenInfo.new(0.12),
+			{
+				Scale = 1.08
+			}
+		):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(
+			uiScale,
+			TweenInfo.new(0.12),
+			{
+				Scale = 1
+			}
+		):Play()
+	end)
 
 	button.MouseButton1Click:Connect(function()
 		createAdminPanel(preset)
@@ -525,18 +636,32 @@ for _,preset in ipairs(presets) do
 	end)
 end
 
--- AUTO ACCEPT
-local autoAccept = false
+local autoText = Instance.new("TextLabel")
+autoText.Parent = frame
+autoText.BackgroundTransparency = 1
+autoText.Position = UDim2.new(0.5,-70,1,-135)
+autoText.Size = UDim2.new(0,140,0,24)
+autoText.Text = "AUTO ACCEPT"
+autoText.Font = Enum.Font.GothamBlack
+autoText.TextSize = 15
+autoText.TextColor3 = Color3.new(1,1,1)
+
+makeNeonText(autoText,neonPink)
 
 local toggleHolder = Instance.new("Frame")
 toggleHolder.Parent = frame
-toggleHolder.Position = UDim2.new(1,-78,1,-86)
+toggleHolder.Position = UDim2.new(0.5,-29,1,-108)
 toggleHolder.Size = UDim2.new(0,58,0,28)
 toggleHolder.BackgroundColor3 = Color3.fromRGB(50,20,40)
 
 local toggleCorner = Instance.new("UICorner")
 toggleCorner.Parent = toggleHolder
 toggleCorner.CornerRadius = UDim.new(1,0)
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Parent = toggleHolder
+toggleStroke.Color = neonPink
+toggleStroke.Thickness = 2
 
 local toggleCircle = Instance.new("Frame")
 toggleCircle.Parent = toggleHolder
@@ -553,29 +678,139 @@ toggleHolder.InputBegan:Connect(function(input)
 		autoAccept = not autoAccept
 
 		if autoAccept then
-			TweenService:Create(toggleCircle, TweenInfo.new(0.18,Enum.EasingStyle.Quint), {
-				Position = UDim2.new(1,-25,0.5,-11),
-				BackgroundColor3 = neonPink
-			}):Play()
+			TweenService:Create(
+				toggleCircle,
+				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
+				{
+					Position = UDim2.new(1,-25,0.5,-11),
+					BackgroundColor3 = neonPink
+				}
+			):Play()
+
+			TweenService:Create(
+				toggleHolder,
+				TweenInfo.new(0.18),
+				{
+					BackgroundColor3 = Color3.fromRGB(80,20,60)
+				}
+			):Play()
 		else
-			TweenService:Create(toggleCircle, TweenInfo.new(0.18,Enum.EasingStyle.Quint), {
-				Position = UDim2.new(0,3,0.5,-11),
-				BackgroundColor3 = Color3.new(1,1,1)
-			}):Play()
+			TweenService:Create(
+				toggleCircle,
+				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
+				{
+					Position = UDim2.new(0,3,0.5,-11),
+					BackgroundColor3 = Color3.new(1,1,1)
+				}
+			):Play()
+
+			TweenService:Create(
+				toggleHolder,
+				TweenInfo.new(0.18),
+				{
+					BackgroundColor3 = Color3.fromRGB(50,20,40)
+				}
+			):Play()
 		end
 	end
 end)
 
--- WEBSITE
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Parent = frame
+sliderFrame.Size = UDim2.new(0,240,0,8)
+sliderFrame.Position = UDim2.new(0.5,-120,1,-62)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(45,20,40)
+
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.Parent = sliderFrame
+sliderCorner.CornerRadius = UDim.new(1,0)
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Parent = sliderFrame
+sliderFill.Size = UDim2.new(0,0,1,0)
+sliderFill.BackgroundColor3 = neonPink
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.Parent = sliderFill
+fillCorner.CornerRadius = UDim.new(1,0)
+
+local knob = Instance.new("Frame")
+knob.Parent = sliderFrame
+knob.AnchorPoint = Vector2.new(0.5,0.5)
+knob.Position = UDim2.new(0,0,0.5,0)
+knob.Size = UDim2.new(0,18,0,18)
+knob.BackgroundColor3 = Color3.new(1,1,1)
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.Parent = knob
+knobCorner.CornerRadius = UDim.new(1,0)
+
+local speedText = Instance.new("TextLabel")
+speedText.Parent = frame
+speedText.BackgroundTransparency = 1
+speedText.Position = UDim2.new(0,0,1,-52)
+speedText.Size = UDim2.new(1,0,0,20)
+speedText.Text = "Speed # ~25 times/sec"
+speedText.Font = Enum.Font.GothamBold
+speedText.TextSize = 13
+speedText.TextColor3 = Color3.new(1,1,1)
+
+makeNeonText(speedText,neonPink)
+
+local draggingSlider = false
+
+local function updateSlider(x)
+	local percent = math.clamp(
+		(x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X,
+		0,
+		1
+	)
+
+	sliderFill.Size = UDim2.new(percent,0,1,0)
+	knob.Position = UDim2.new(percent,0,0.5,0)
+
+	acceptSpeed = math.floor(25 + (percent * 475))
+
+	speedText.Text = "Speed # ~"..acceptSpeed.." times/sec"
+end
+
+updateSlider(sliderFrame.AbsolutePosition.X)
+
+knob.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = true
+	end
+end)
+
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		updateSlider(input.Position.X)
+	end
+end)
+
+sliderFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		updateSlider(input.Position.X)
+	end
+end)
+
 local website = Instance.new("TextButton")
 website.Parent = frame
 website.Size = UDim2.new(1,0,0,24)
-website.Position = UDim2.new(0,0,1,-35)
+website.Position = UDim2.new(0,0,1,-28)
 website.BackgroundTransparency = 1
 website.Text = "t17ed.github.io"
 website.Font = Enum.Font.GothamBlack
 website.TextSize = 15
 website.TextColor3 = softPink
+
+makeNeonText(website,neonPink)
 
 website.MouseButton1Click:Connect(function()
 	pcall(function()
@@ -584,10 +819,12 @@ website.MouseButton1Click:Connect(function()
 		end
 	end)
 
-	showNotification("Copied to clipboard!", Color3.fromRGB(255,255,0))
+	showNotification(
+		"Copied to clipboard!",
+		Color3.fromRGB(255,255,0)
+	)
 end)
 
--- MINIMIZE
 local minimized = false
 
 minimize.MouseButton1Click:Connect(function()
@@ -595,32 +832,51 @@ minimize.MouseButton1Click:Connect(function()
 
 	if minimized then
 		minimize.Text = "+"
-		TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quint), {
-			Size = UDim2.new(0,340,0,45)
-		}):Play()
+
+		TweenService:Create(
+			frame,
+			TweenInfo.new(0.25,Enum.EasingStyle.Quint),
+			{
+				Size = UDim2.new(0,340,0,45)
+			}
+		):Play()
+
 		buttonsHolder.Visible = false
 		toggleHolder.Visible = false
+		autoText.Visible = false
 		website.Visible = false
+		sliderFrame.Visible = false
+		speedText.Visible = false
 	else
 		minimize.Text = "-"
+
 		buttonsHolder.Visible = true
 		toggleHolder.Visible = true
+		autoText.Visible = true
 		website.Visible = true
-		TweenService:Create(frame, TweenInfo.new(0.25,Enum.EasingStyle.Quint), {
-			Size = UDim2.new(0,340,0,360)
-		}):Play()
+		sliderFrame.Visible = true
+		speedText.Visible = true
+
+		TweenService:Create(
+			frame,
+			TweenInfo.new(0.25,Enum.EasingStyle.Quint),
+			{
+				Size = UDim2.new(0,340,0,430)
+			}
+		):Play()
 	end
 end)
 
--- KEYBIND
 UIS.InputBegan:Connect(function(input,gpe)
-	if gpe then return end
+	if gpe then
+		return
+	end
+
 	if input.KeyCode == Enum.KeyCode.Backquote then
 		gui.Enabled = not gui.Enabled
 	end
 end)
 
--- DRAGGING
 local dragging = false
 local dragStart
 local startPos
@@ -642,6 +898,7 @@ end)
 UIS.InputChanged:Connect(function(input)
 	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 		local delta = input.Position - dragStart
+
 		frame.Position = UDim2.new(
 			startPos.X.Scale,
 			startPos.X.Offset + delta.X,
@@ -651,19 +908,27 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- AUTO ACCEPT
 local readyFrame
 local readyButton
 
 local function findGui()
 	local gui = playerGui:FindFirstChild("TradeLiveTrade")
-	if not gui then return end
+
+	if not gui then
+		return
+	end
 
 	local main = gui:FindFirstChild("TradeLiveTrade")
-	if not main then return end
+
+	if not main then
+		return
+	end
 
 	local other = main:FindFirstChild("Other")
-	if not other then return end
+
+	if not other then
+		return
+	end
 
 	readyFrame = other:FindFirstChild("Ready")
 	readyButton = other:FindFirstChild("ReadyButton")
@@ -679,9 +944,17 @@ playerGui.DescendantAdded:Connect(function(v)
 end)
 
 local function click(button)
-	if not button then return end
-	if not button.Visible then return end
-	if not button.Active then return end
+	if not button then
+		return
+	end
+
+	if not button.Visible then
+		return
+	end
+
+	if not button.Active then
+		return
+	end
 
 	pcall(function()
 		button:Activate()
@@ -701,56 +974,88 @@ local function click(button)
 end
 
 RunService.Heartbeat:Connect(function()
-	if not autoAccept then return end
-	if not readyFrame or not readyButton then return end
+	if not autoAccept then
+		return
+	end
+
+	if not readyFrame or not readyButton then
+		findGui()
+		return
+	end
+
 	if readyFrame.Visible then
-		click(readyButton)
-		click(readyButton)
-		click(readyButton)
+		if tick() - lastAccept >= (1 / acceptSpeed) then
+			lastAccept = tick()
+			click(readyButton)
+		end
 	end
 end)
 
--- =========================================================
--- NEW FEATURE: ACCEPTED STATE FILTER (ADDED ONLY)
--- =========================================================
-
-local function isAcceptedState()
-	local ok, txt = pcall(function()
-		return playerGui
-			:WaitForChild("TradeLiveTrade")
-			:WaitForChild("TradeLiveTrade")
-			:WaitForChild("Other")
-			:WaitForChild("ReadyButton")
-			:WaitForChild("Txt").Text
-	end)
-	return ok and txt == "ACCEPTED"
-end
-
-local function updateGreenStyleVisibility()
-	local accepted = isAcceptedState()
-
-	-- green style buttons = preset buttons (ImageButtons inside buttonsHolder)
-	for _, obj in ipairs(buttonsHolder:GetChildren()) do
-		if obj:IsA("ImageButton") then
-			obj.Visible = accepted
-		end
+local function isGreenStyle(panel)
+	if not panel then
+		return false
 	end
 
-	-- everything else should toggle based on state
-	if accepted then
-		-- hide non-green UI
-		toggleHolder.Visible = false
-		website.Visible = false
-	else
-		-- restore UI
-		toggleHolder.Visible = true
-		website.Visible = true
+	if panel:GetAttribute("Clicked") == true then
+		return true
+	end
+
+	local spacer = panel:FindFirstChild("Spacer")
+
+	if spacer and spacer.BackgroundColor3 == clickedColor then
+		return true
+	end
+
+	return false
+end
+
+local function updateGreenVisibility()
+	local other = tradeUI:FindFirstChild("Other")
+
+	if not other then
+		return
+	end
+
+	local readyButton = other:FindFirstChild("ReadyButton")
+
+	if not readyButton then
+		return
+	end
+
+	local txt = readyButton:FindFirstChild("Txt")
+
+	if not txt then
+		return
+	end
+
+	local accepted = (txt.Text == "ACCEPT")
+
+	for _, panel in ipairs(adminPanels) do
+		if panel and panel.Parent then
+			if accepted then
+				panel.Visible = isGreenStyle(panel)
+			else
+				panel.Visible = true
+			end
+		end
 	end
 end
 
 task.spawn(function()
 	while true do
-		updateGreenStyleVisibility()
-		task.wait(0.2)
+		pcall(updateGreenVisibility)
+		task.wait(0.1)
 	end
 end)
+
+local function hookAcceptedWatcher()
+	local other = tradeUI:WaitForChild("Other")
+	local readyButton = other:WaitForChild("ReadyButton")
+	local txt = readyButton:WaitForChild("Txt")
+
+	txt:GetPropertyChangedSignal("Text"):Connect(function()
+		updateGreenVisibility()
+	end)
+end
+
+task.spawn(hookAcceptedWatcher)
