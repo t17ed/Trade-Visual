@@ -1162,7 +1162,7 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				--// TEMPORARY AUTO ACCEPT ONLY WHEN EXACTLY "⏰0.1s Left"
+				--// TEMP AUTO ACCEPT
 				if timer.Text == "⏰0.1s Left"
 				and txt.Text == "ACCEPT"
 				and ready.Visible then
@@ -1180,6 +1180,38 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end
+
+	--// DISABLE TEMP AUTO ACCEPT
+	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
+
+		temporaryAutoAccept = false
+		autoAccept = manualAutoAccept
+
+		updateToggle()
+	end
+
+	--// STOP HERE IF AUTO ACCEPT OFF
+	if not autoAccept then
+		return
+	end
+
+	--// REFIND GUI
+	if not readyFrame or not readyButton then
+		findGui()
+		return
+	end
+
+	--// CLICK ACCEPT
+	if readyFrame.Visible then
+
+		if tick() - lastAccept >= (0.1 / acceptSpeed) then
+
+			lastAccept = tick()
+
+			click(readyButton)
+		end
+	end
+end)
 
 	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
