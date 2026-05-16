@@ -396,7 +396,7 @@ local function createAdminPanel(preset)
 
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 
-			playSound("rbxassetid://75311202481026",0.75)
+			playSound("rbxassetid://75311202481026",1)
 
 			if getAcceptState() then
 
@@ -411,7 +411,7 @@ local function createAdminPanel(preset)
 					end
 
 					showNotification(
-						'',
+						'Removed "'..preset.Title..'" from trade!',
 						Color3.fromRGB(255,0,0)
 					)
 
@@ -432,7 +432,7 @@ local function createAdminPanel(preset)
 				end
 
 				showNotification(
-					'',
+					'Removed "'..preset.Title..'" from trade!',
 					Color3.fromRGB(255,0,0)
 				)
 
@@ -485,7 +485,7 @@ local function removePreset(name)
 				removedPresets[panel] = true
 
 				showNotification(
-					' ',
+					'Removed "'..name..'" preset!',
 					Color3.fromRGB(255,0,0)
 				)
 
@@ -543,7 +543,7 @@ end)
 
 --// MAIN GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "T17ED Spawner"
+gui.Name = "SpawnerUI"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 999999
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -885,8 +885,8 @@ speedBox.FocusLost:Connect(function()
 		num = 25
 	end
 
-	if num > 1000 then
-		num = 1000
+	if num > 500 then
+		num = 500
 	end
 
 	acceptSpeed = num
@@ -1162,10 +1162,8 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				--// TEMP AUTO ACCEPT
-				if timer.Text == "⏰0.1s Left"
-				and txt.Text == "ACCEPT"
-				and ready.Visible then
+				--// TEMPORARY AUTO ACCEPT ONLY 5 SECONDS
+				if timer.Text:find("0%.") and txt.Text == "ACCEPT" and ready.Visible then
 
 					if not temporaryAutoAccept then
 
@@ -1180,38 +1178,6 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end
-
-	--// DISABLE TEMP AUTO ACCEPT
-	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
-
-		temporaryAutoAccept = false
-		autoAccept = manualAutoAccept
-
-		updateToggle()
-	end
-
-	--// STOP HERE IF AUTO ACCEPT OFF
-	if not autoAccept then
-		return
-	end
-
-	--// REFIND GUI
-	if not readyFrame or not readyButton then
-		findGui()
-		return
-	end
-
-	--// CLICK ACCEPT
-	if readyFrame.Visible then
-
-		if tick() - lastAccept >= (0.1 / acceptSpeed) then
-
-			lastAccept = tick()
-
-			click(readyButton)
-		end
-	end
-end)
 
 	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
@@ -1233,7 +1199,7 @@ end)
 
 	if readyFrame.Visible then
 
-		if tick() - lastAccept >= (0.1 / acceptSpeed) then
+		if tick() - lastAccept >= (1 / acceptSpeed) then
 
 			lastAccept = tick()
 
