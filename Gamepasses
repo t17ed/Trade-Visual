@@ -885,8 +885,8 @@ speedBox.FocusLost:Connect(function()
 		num = 25
 	end
 
-	if num > 500 then
-		num = 500
+	if num > 1000 then
+		num = 1000
 	end
 
 	acceptSpeed = num
