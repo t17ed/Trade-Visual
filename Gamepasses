@@ -1199,7 +1199,7 @@ RunService.Heartbeat:Connect(function()
 
 	if readyFrame.Visible then
 
-		if tick() - lastAccept >= (1 / acceptSpeed) then
+		if tick() - lastAccept >= (0.1 / acceptSpeed) then
 
 			lastAccept = tick()
 
