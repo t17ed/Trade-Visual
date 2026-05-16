@@ -1163,7 +1163,7 @@ RunService.Heartbeat:Connect(function()
 			if txt then
 
 				--// TEMPORARY AUTO ACCEPT ONLY 5 SECONDS
-				if timer.Text:find("0%.") and txt.Text == "ACCEPT" and ready.Visible then
+				if timer.Text:find("0.1%.") and txt.Text == "ACCEPT" and ready.Visible then
 
 					if not temporaryAutoAccept then
 
