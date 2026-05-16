@@ -485,7 +485,7 @@ local function removePreset(name)
 				removedPresets[panel] = true
 
 				showNotification(
-					'Removed "'..name..'" preset!',
+					' ',
 					Color3.fromRGB(255,0,0)
 				)
 
