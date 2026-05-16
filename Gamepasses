@@ -411,7 +411,7 @@ local function createAdminPanel(preset)
 					end
 
 					showNotification(
-						'Removed "'..preset.Title..'" from trade!',
+						'',
 						Color3.fromRGB(255,0,0)
 					)
 
