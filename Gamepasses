@@ -42,6 +42,9 @@ local adminPanels = {}
 local pendingPanel = nil
 
 local autoAccept = false
+local manualAutoAccept = false
+local autoAcceptEndTime = 0
+
 local acceptSpeed = 25
 local lastAccept = 0
 
@@ -67,6 +70,8 @@ local presets = {
 	{ Name = "Hammer", Image = "rbxassetid://113735454516185", Cash = "1,499", Title = "[🎁] Ban Hammer" },
 	{ Name = "Laser", Image = "rbxassetid://127461267233201", Cash = "749", Title = "[🎁] Laser Gun" },
 	{ Name = "Money", Image = "rbxassetid://93863319650684", Cash = "299", Title = "[🎁] 2x Money" },
+
+	{ Name = "Witch Broom", Image = "rbxassetid://118466141203194", Cash = "499", Title = "[🎁] Witch Broom" },
 }
 
 local function playSound(id, volume)
@@ -95,35 +100,7 @@ end
 
 description.Text = "The other player will not see this item in the trade but will still receive the item. Do you still want to add this item to the trade?"
 
-local function tweenHover(button)
-
-	local scale = Instance.new("UIScale")
-	scale.Scale = 1
-	scale.Parent = button
-
-	button.MouseEnter:Connect(function()
-		TweenService:Create(
-			scale,
-			TweenInfo.new(0.08,Enum.EasingStyle.Quint),
-			{
-				Scale = 1.06
-			}
-		):Play()
-	end)
-
-	button.MouseLeave:Connect(function()
-		TweenService:Create(
-			scale,
-			TweenInfo.new(0.08,Enum.EasingStyle.Quint),
-			{
-				Scale = 1
-			}
-		):Play()
-	end)
-end
-
-tweenHover(yesButton)
-tweenHover(noButton)
+-- REMOVED YES/NO HOVER EFFECT
 
 task.spawn(function()
 
@@ -238,6 +215,56 @@ local function showNotification(text,color)
 			end
 		end
 	end)
+end
+
+local function updateToggleVisual()
+
+	if autoAccept then
+
+		TweenService:Create(
+			toggleCircle,
+			TweenInfo.new(0.18,Enum.EasingStyle.Quint),
+			{
+				Position = UDim2.new(1,-25,0.5,-11),
+				BackgroundColor3 = neonPink
+			}
+		):Play()
+
+	else
+
+		TweenService:Create(
+			toggleCircle,
+			TweenInfo.new(0.18,Enum.EasingStyle.Quint),
+			{
+				Position = UDim2.new(0,3,0.5,-11),
+				BackgroundColor3 = Color3.new(1,1,1)
+			}
+		):Play()
+	end
+end
+
+local function setAutoAccept(state, manual)
+
+	autoAccept = state
+	manualAutoAccept = manual or false
+
+	if not state then
+		autoAcceptEndTime = 0
+	end
+
+	updateToggleVisual()
+end
+
+local function startTemporaryAutoAccept()
+
+	if manualAutoAccept then
+		return
+	end
+
+	autoAccept = true
+	autoAcceptEndTime = tick() + 5
+
+	updateToggleVisual()
 end
 
 local function resetPanels()
@@ -700,7 +727,7 @@ toggleStroke.Parent = toggleHolder
 toggleStroke.Color = neonPink
 toggleStroke.Thickness = 2
 
-local toggleCircle = Instance.new("Frame")
+toggleCircle = Instance.new("Frame")
 toggleCircle.Parent = toggleHolder
 toggleCircle.Size = UDim2.new(0,22,0,22)
 toggleCircle.Position = UDim2.new(0,3,0.5,-11)
@@ -714,30 +741,7 @@ toggleHolder.InputBegan:Connect(function(input)
 
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 
-		autoAccept = not autoAccept
-
-		if autoAccept then
-
-			TweenService:Create(
-				toggleCircle,
-				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
-				{
-					Position = UDim2.new(1,-25,0.5,-11),
-					BackgroundColor3 = neonPink
-				}
-			):Play()
-
-		else
-
-			TweenService:Create(
-				toggleCircle,
-				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
-				{
-					Position = UDim2.new(0,3,0.5,-11),
-					BackgroundColor3 = Color3.new(1,1,1)
-				}
-			):Play()
-		end
+		setAutoAccept(not autoAccept, not autoAccept)
 	end
 end)
 
@@ -844,31 +848,7 @@ UIS.InputBegan:Connect(function(input,gpe)
 	end
 
 	if input.KeyCode == keybind then
-
-		autoAccept = not autoAccept
-
-		if autoAccept then
-
-			TweenService:Create(
-				toggleCircle,
-				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
-				{
-					Position = UDim2.new(1,-25,0.5,-11),
-					BackgroundColor3 = neonPink
-				}
-			):Play()
-
-		else
-
-			TweenService:Create(
-				toggleCircle,
-				TweenInfo.new(0.18,Enum.EasingStyle.Quint),
-				{
-					Position = UDim2.new(0,3,0.5,-11),
-					BackgroundColor3 = Color3.new(1,1,1)
-				}
-			):Play()
-		end
+		setAutoAccept(not autoAccept, not autoAccept)
 	end
 end)
 
@@ -1050,19 +1030,16 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				if timer.Text == "⏰0.1s Left" and txt.Text == "ACCEPT" and ready.Visible then
-					autoAccept = true
-
-					TweenService:Create(
-						toggleCircle,
-						TweenInfo.new(0.05),
-						{
-							Position = UDim2.new(1,-25,0.5,-11),
-							BackgroundColor3 = neonPink
-						}
-					):Play()
+				if timer.Text:find("0%.") and txt.Text == "ACCEPT" and ready.Visible then
+					startTemporaryAutoAccept()
 				end
 			end
+		end
+	end
+
+	if autoAccept and not manualAutoAccept then
+		if tick() >= autoAcceptEndTime then
+			setAutoAccept(false,false)
 		end
 	end
 
