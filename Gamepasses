@@ -1162,21 +1162,24 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
---// TEMPORARY AUTO ACCEPT ONLY WHEN EXACTLY "⏰0.1s Left"
-if timer.Text == "⏰0.1s Left"
-	and txt.Text == "ACCEPT"
-	and ready.Visible then
+				--// TEMPORARY AUTO ACCEPT ONLY WHEN EXACTLY "⏰0.1s Left"
+				if timer.Text == "⏰0.1s Left"
+				and txt.Text == "ACCEPT"
+				and ready.Visible then
 
-	if not temporaryAutoAccept then
+					if not temporaryAutoAccept then
 
-		temporaryAutoAccept = true
-		temporaryAcceptEnd = tick() + 5
+						temporaryAutoAccept = true
+						temporaryAcceptEnd = tick() + 5
 
-		autoAccept = true
+						autoAccept = true
 
-		updateToggle()
+						updateToggle()
+					end
+				end
+			end
+		end
 	end
-end
 
 	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
