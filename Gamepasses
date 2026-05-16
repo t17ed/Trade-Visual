@@ -396,7 +396,7 @@ local function createAdminPanel(preset)
 
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 
-			playSound("rbxassetid://75311202481026",1)
+			playSound("rbxassetid://75311202481026",0.75)
 
 			if getAcceptState() then
 
@@ -543,7 +543,7 @@ end)
 
 --// MAIN GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "SpawnerUI"
+gui.Name = "T17ED Spawner"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 999999
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -1162,22 +1162,21 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				--// TEMPORARY AUTO ACCEPT ONLY 5 SECONDS
-				if timer.Text:find("0%.") and txt.Text == "ACCEPT" and ready.Visible then
+--// TEMPORARY AUTO ACCEPT ONLY WHEN EXACTLY "⏰0.1s Left"
+if timer.Text == "⏰0.1s Left"
+	and txt.Text == "ACCEPT"
+	and ready.Visible then
 
-					if not temporaryAutoAccept then
+	if not temporaryAutoAccept then
 
-						temporaryAutoAccept = true
-						temporaryAcceptEnd = tick() + 5
+		temporaryAutoAccept = true
+		temporaryAcceptEnd = tick() + 5
 
-						autoAccept = true
+		autoAccept = true
 
-						updateToggle()
-					end
-				end
-			end
-		end
+		updateToggle()
 	end
+end
 
 	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
