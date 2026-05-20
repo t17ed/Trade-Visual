@@ -120,42 +120,42 @@ local presets = {
 	},
 
 	{
-		Name = "PotGold",
+		Name = "Lucky Base",
 		Image = "rbxassetid://90829604470739",
 		Cash = "799",
 		Title = "[🎁] Pot of Gold Base"
 	},
 
 	{
-		Name = "BunnyBasket",
+		Name = "Bunny Base",
 		Image = "rbxassetid://114643827804140",
 		Cash = "999",
 		Title = "[🎁] Bunny Basket Base"
 	},
 
 	{
-		Name = "CupidsWings",
+		Name = "Wings",
 		Image = "rbxassetid://119199032365694",
 		Cash = "799",
 		Title = "[🎁] Cupids Wings"
 	},
 
 	{
-		Name = "BlackholeSlap",
+		Name = "Blackhole",
 		Image = "rbxassetid://88520285647604",
 		Cash = "199",
 		Title = "[🎁] Blackhole Slap"
 	},
 
 	{
-		Name = "FlyingCarpet",
+		Name = "Carpet",
 		Image = "rbxassetid://124807886192972",
 		Cash = "375",
 		Title = "[🎁] Flying Carpet"
 	},
 
 	{
-		Name = "SpyderChain",
+		Name = "Chain",
 		Image = "rbxassetid://87015585062731",
 		Cash = "999,999",
 		Title = "[🎁] Spyder Chain"
