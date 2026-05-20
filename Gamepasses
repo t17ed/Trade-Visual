@@ -1,3 +1,4 @@
+```lua
 --// SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -117,6 +118,48 @@ local presets = {
 		Image = "rbxassetid://118466141203194",
 		Cash = "499",
 		Title = "[🎁] Witch Broom"
+	},
+
+	{
+		Name = "PotGold",
+		Image = "rbxassetid://90829604470739",
+		Cash = "799",
+		Title = "[🎁] Pot of Gold Base"
+	},
+
+	{
+		Name = "BunnyBasket",
+		Image = "rbxassetid://114643827804140",
+		Cash = "999",
+		Title = "[🎁] Bunny Basket Base"
+	},
+
+	{
+		Name = "CupidsWings",
+		Image = "rbxassetid://119199032365694",
+		Cash = "799",
+		Title = "[🎁] Cupids Wings"
+	},
+
+	{
+		Name = "Blackhole",
+		Image = "rbxassetid://88520285647604",
+		Cash = "199",
+		Title = "[🎁] Blackhole Slap"
+	},
+
+	{
+		Name = "FlyingCarpet",
+		Image = "rbxassetid://124807886192972",
+		Cash = "375",
+		Title = "[🎁] Flying Carpet"
+	},
+
+	{
+		Name = "SpyderChain",
+		Image = "rbxassetid://138426153297077",
+		Cash = "999,999",
+		Title = "[🎁] Spyder Chain"
 	},
 }
 
@@ -1162,8 +1205,7 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				--// TEMPORARY AUTO ACCEPT ONLY 5 SECONDS
-				if timer.Text:find("0.1%.") and txt.Text == "ACCEPT" and ready.Visible then
+				if timer.Text == "⏰0.1s Left" and txt.Text == "ACCEPT" and ready.Visible then
 
 					if not temporaryAutoAccept then
 
@@ -1179,7 +1221,6 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
 
 		temporaryAutoAccept = false
@@ -1286,3 +1327,4 @@ task.spawn(function()
 		task.wait()
 	end
 end)
+```
