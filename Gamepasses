@@ -118,6 +118,48 @@ local presets = {
 		Cash = "499",
 		Title = "[🎁] Witch Broom"
 	},
+
+	{
+		Name = "PotGold",
+		Image = "rbxassetid://90829604470739",
+		Cash = "799",
+		Title = "[🎁] Pot of Gold Base"
+	},
+
+	{
+		Name = "BunnyBasket",
+		Image = "rbxassetid://114643827804140",
+		Cash = "999",
+		Title = "[🎁] Bunny Basket Base"
+	},
+
+	{
+		Name = "CupidsWings",
+		Image = "rbxassetid://119199032365694",
+		Cash = "799",
+		Title = "[🎁] Cupids Wings"
+	},
+
+	{
+		Name = "BlackholeSlap",
+		Image = "rbxassetid://88520285647604",
+		Cash = "199",
+		Title = "[🎁] Blackhole Slap"
+	},
+
+	{
+		Name = "FlyingCarpet",
+		Image = "rbxassetid://124807886192972",
+		Cash = "375",
+		Title = "[🎁] Flying Carpet"
+	},
+
+	{
+		Name = "SpyderChain",
+		Image = "rbxassetid://138426153297077",
+		Cash = "999,999",
+		Title = "[🎁] Spyder Chain"
+	},
 }
 
 --// SOUND
@@ -1162,8 +1204,9 @@ RunService.Heartbeat:Connect(function()
 
 			if txt then
 
-				--// TEMPORARY AUTO ACCEPT ONLY 5 SECONDS
-				if timer.Text:find("0%.") and txt.Text == "ACCEPT" and ready.Visible then
+				if timer.Text == "⏰0.1s Left"
+					and txt.Text == "ACCEPT"
+					and ready.Visible then
 
 					if not temporaryAutoAccept then
 
@@ -1179,7 +1222,6 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	--// TURN OFF TEMP AUTO AFTER 5 SEC
 	if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
 
 		temporaryAutoAccept = false
@@ -1197,13 +1239,28 @@ RunService.Heartbeat:Connect(function()
 		return
 	end
 
-	if readyFrame.Visible then
+	local other = tradeUI:FindFirstChild("Other")
 
-		if tick() - lastAccept >= (1 / acceptSpeed) then
+	if other then
 
-			lastAccept = tick()
+		local ready = other:FindFirstChild("Ready")
+		local readyButtonObj = other:FindFirstChild("ReadyButton")
 
-			click(readyButton)
+		if ready and readyButtonObj then
+
+			local txt = readyButtonObj:FindFirstChild("Txt")
+
+			if txt
+				and ready.Visible
+				and txt.Text == "ACCEPT" then
+
+				if tick() - lastAccept >= (1 / acceptSpeed) then
+
+					lastAccept = tick()
+
+					click(readyButton)
+				end
+			end
 		end
 	end
 end)
