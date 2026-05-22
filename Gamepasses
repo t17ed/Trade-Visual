@@ -157,7 +157,7 @@ local presets = {
 	{
 		Name = "Chain",
 		Image = "rbxassetid://70478645851404",
-		Cash = "999,999",
+		Cash = "4,670,000",
 		Title = "[🎁] Spyder Chain"
 	},
 }
