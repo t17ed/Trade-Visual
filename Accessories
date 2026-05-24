@@ -136,16 +136,6 @@ local function addAccessoryToCharacter(accessoryId, parentPart, character)
 
 	accessory.Parent = character
 	activeAccessories[accessoryKey] = accessory
-
-	accessory.AncestryChanged:Connect(function(_, parent)
-		if parent == nil and character and character.Parent then
-			task.delay(0.1, function()
-				if character and character.Parent then
-					accessory.Parent = character
-				end
-			end)
-		end
-	end)
 end
 
 local function forceHeadless(head)
@@ -217,7 +207,6 @@ local function applyHeadless(character)
 
 		if headAccessory then
 			headAccessory.Name = "HeadlessHead"
-			headAccessory.Parent = workspace
 
 			local handle = headAccessory:FindFirstChild("Handle")
 
@@ -225,14 +214,6 @@ local function applyHeadless(character)
 				handle.CanCollide = false
 				handle.Transparency = 1
 				handle.Size = Vector3.new(0.001, 0.001, 0.001)
-
-				local mesh =
-					handle:FindFirstChildOfClass("SpecialMesh")
-					or handle:FindFirstChildOfClass("MeshPart")
-
-				if mesh and mesh:IsA("SpecialMesh") then
-					mesh.Scale = Vector3.new(0.001, 0.001, 0.001)
-				end
 
 				weldParts(head, handle, CFrame.new(), CFrame.new())
 
@@ -252,16 +233,6 @@ local function applyHeadless(character)
 				if head.Transparency ~= 1 then
 					forceHeadless(head)
 				end
-
-				for _, child in pairs(head:GetChildren()) do
-					if (child:IsA("Decal") or child.Name == "face")
-						and child.Transparency ~= 1 then
-						child.Transparency = 1
-					end
-				end
-			else
-				headlessConnection:Disconnect()
-				headlessConnection = nil
 			end
 		end)
 	else
@@ -271,7 +242,7 @@ local function applyHeadless(character)
 	end
 end
 
--- FIXED KORBLOX
+-- ACTUAL WORKING KORBLOX METHOD
 local function applyKorblox(character)
 	if not getgenv().KorbloxLeg then
 		return
@@ -283,53 +254,36 @@ local function applyKorblox(character)
 		return
 	end
 
-	local success, description = pcall(function()
-		return Players:GetHumanoidDescriptionFromUserId(player.UserId)
-	end)
+	local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
+	local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
+	local rightFoot = character:FindFirstChild("RightFoot")
 
-	if not success or not description then
+	-- R6 SUPPORT
+	if character:FindFirstChild("Right Leg") then
+		character["Right Leg"].Transparency = 1
 		return
 	end
 
-	-- REAL KORBLOX RIGHT LEG PACKAGE
-	description.RightLeg = 139607718
-
-	pcall(function()
-		humanoid:ApplyDescription(description)
-	end)
-
-	task.wait(0.25)
-
-	local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
-	local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
-	local rightFoot = character:FindFirstChild("RightFoot")
-
+	-- R15 SUPPORT
 	if rightUpperLeg then
 		rightUpperLeg.Transparency = 1
-
-		for _, v in pairs(rightUpperLeg:GetDescendants()) do
-			if v:IsA("Decal") then
-				v.Transparency = 1
-			end
-		end
 	end
 
 	if rightLowerLeg then
 		rightLowerLeg.Transparency = 1
-
-		for _, v in pairs(rightLowerLeg:GetDescendants()) do
-			if v:IsA("Decal") then
-				v.Transparency = 1
-			end
-		end
+		rightLowerLeg.Size = Vector3.new(0.05, 0.05, 0.05)
 	end
 
 	if rightFoot then
 		rightFoot.Transparency = 1
+		rightFoot.Size = Vector3.new(0.05, 0.05, 0.05)
+	end
 
-		for _, v in pairs(rightFoot:GetDescendants()) do
-			if v:IsA("Decal") then
-				v.Transparency = 1
+	-- REMOVE MESHES
+	for _, v in pairs(character:GetDescendants()) do
+		if v:IsA("SpecialMesh") then
+			if v.Parent == rightLowerLeg or v.Parent == rightFoot then
+				v:Destroy()
 			end
 		end
 	end
