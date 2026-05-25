@@ -1,19 +1,94 @@
-local screenGui = game:WaitForChild("CoreGui")
+local coreGui = game:GetService("CoreGui")
 
-local foundationOverlay = screenGui:WaitForChild("FoundationOverlay")
-local safeAreaFrame = foundationOverlay:WaitForChild("SafeAreaFrame")
-local overlayPortal = safeAreaFrame:WaitForChild("OverlayPortal")
-local sheetContainer = overlayPortal:WaitForChild("SheetContainer")
-local overlayPortal2 = sheetContainer:WaitForChild("OverlayPortal")
-local sheetContainer2 = overlayPortal2:WaitForChild("SheetContainer")
-local frame = sheetContainer2:WaitForChild("Frame")
-local sheet = frame:WaitForChild("Sheet")
-local content = sheet:WaitForChild("Content")
-local actions = content:WaitForChild("Actions")
-local header = actions:WaitForChild("Header")
-local headerContent = header:WaitForChild("Content")
-local rightSide = headerContent:WaitForChild("RightSide")
-local robuxPrice = rightSide:WaitForChild("RobuxPrice")
+print("[RobuxEditor] Waiting for FoundationOverlay...")
 
-robuxPrice.RichText = true
-robuxPrice.Text = '<font face="rbxasset://fonts/families/SourceSansPro.json" weight="Regular">robux</font> 500,000'
+local foundationOverlay = coreGui:WaitForChild("FoundationOverlay")
+
+print("T17eds Robux Spoofer init : Put in autoexecute")
+
+local TARGET_TEXT =
+'<font family="rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json" weight="400">robux</font> 536,374,194'
+
+local hooked = {}
+
+local function forceObject(obj)
+	if not obj then
+		return
+	end
+
+	if not (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
+		return
+	end
+
+	obj.RichText = true
+
+	-- instant apply
+	obj.Text = TARGET_TEXT
+
+	-- avoid double-hooking
+	if hooked[obj] then
+		return
+	end
+
+	hooked[obj] = true
+
+	print("[RobuxEditor] Hooked:", obj:GetFullName())
+
+	-- sub 1ms times
+	obj:GetPropertyChangedSignal("Text"):Connect(function()
+		if obj.Text ~= TARGET_TEXT and obj.Visible then
+			obj.Text = TARGET_TEXT
+		end
+	end)
+
+	-- check visibility
+	obj:GetPropertyChangedSignal("Visible"):Connect(function()
+		if obj.Visible then
+			obj.Text = TARGET_TEXT
+		end
+	end)
+
+	-- force text
+	task.spawn(function()
+		while obj and obj.Parent do
+			if obj.Visible then
+				if obj.Text ~= TARGET_TEXT then
+					obj.Text = TARGET_TEXT
+				end
+
+				if not obj.RichText then
+					obj.RichText = true
+				end
+			end
+
+			task.wait()
+		end
+
+		hooked[obj] = nil
+	end)
+end
+
+-- scan
+for _, descendant in ipairs(foundationOverlay:GetDescendants()) do
+	if descendant.Name == "RobuxPrice" then
+		forceObject(descendant)
+	end
+end
+
+-- future hooks
+foundationOverlay.DescendantAdded:Connect(function(descendant)
+	if descendant.Name == "RobuxPrice" then
+		print("[RobuxEditor] New RobuxPrice detected.")
+		forceObject(descendant)
+	end
+end)
+
+task.spawn(function()
+	while task.wait(1) do
+		for _, descendant in ipairs(foundationOverlay:GetDescendants()) do
+			if descendant.Name == "RobuxPrice" then
+				forceObject(descendant)
+			end
+		end
+	end
+end)
