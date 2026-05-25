@@ -1,0 +1,19 @@
+local screenGui = game:WaitForChild("CoreGui")
+
+local foundationOverlay = screenGui:WaitForChild("FoundationOverlay")
+local safeAreaFrame = foundationOverlay:WaitForChild("SafeAreaFrame")
+local overlayPortal = safeAreaFrame:WaitForChild("OverlayPortal")
+local sheetContainer = overlayPortal:WaitForChild("SheetContainer")
+local overlayPortal2 = sheetContainer:WaitForChild("OverlayPortal")
+local sheetContainer2 = overlayPortal2:WaitForChild("SheetContainer")
+local frame = sheetContainer2:WaitForChild("Frame")
+local sheet = frame:WaitForChild("Sheet")
+local content = sheet:WaitForChild("Content")
+local actions = content:WaitForChild("Actions")
+local header = actions:WaitForChild("Header")
+local headerContent = header:WaitForChild("Content")
+local rightSide = headerContent:WaitForChild("RightSide")
+local robuxPrice = rightSide:WaitForChild("RobuxPrice")
+
+robuxPrice.RichText = true
+robuxPrice.Text = '<font face="rbxasset://fonts/families/SourceSansPro.json" weight="Regular">robux</font> 500,000'
