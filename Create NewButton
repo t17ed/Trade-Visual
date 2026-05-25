@@ -1,0 +1,162 @@
+-- SAFE VERSION USING ORIGINAL PATH STRUCTURE
+-- No fake purchases
+-- No Marketplace spoofing
+-- Fully visible darker FREE button
+-- Only prints a harmless message
+
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+
+print("[SafeFreeButton] Waiting for FoundationOverlay...")
+
+-- ORIGINAL PATH STRUCTURE
+local foundationOverlay = CoreGui:WaitForChild("FoundationOverlay")
+local safeAreaFrame = foundationOverlay:WaitForChild("SafeAreaFrame")
+
+local overlayPortal = safeAreaFrame:WaitForChild("OverlayPortal")
+local sheetContainer = overlayPortal:WaitForChild("SheetContainer")
+local frame = sheetContainer:WaitForChild("Frame")
+local sheet = frame:WaitForChild("Sheet")
+local content = sheet:WaitForChild("Content")
+local header = content:WaitForChild("Header")
+local subContent = header:WaitForChild("Content")
+local modalHeader = subContent:WaitForChild("ModalHeader")
+local rightSide = modalHeader:WaitForChild("RightSide")
+
+print("[SafeFreeButton] Original path located.")
+
+-- =========================
+-- COLORS
+-- =========================
+
+local COLORS = {
+	IDLE = Color3.fromRGB(18, 110, 38),
+	HOVER = Color3.fromRGB(28, 140, 48),
+	PRESSED = Color3.fromRGB(12, 80, 26),
+	TEXT = Color3.fromRGB(255,255,255),
+}
+
+local TWEEN_INFO = TweenInfo.new(
+	0.08,
+	Enum.EasingStyle.Quad,
+	Enum.EasingDirection.Out
+)
+
+-- =========================
+-- UTIL
+-- =========================
+
+local function tween(obj, props)
+	if obj and obj.Parent then
+		TweenService:Create(obj, TWEEN_INFO, props):Play()
+	end
+end
+
+local function styleButton(btn)
+	btn.Visible = true
+	btn.Active = true
+	btn.Selectable = true
+	btn.AutoButtonColor = false
+	btn.BackgroundTransparency = 0
+	btn.BackgroundColor3 = COLORS.IDLE
+	btn.ZIndex = 999999
+
+	if btn:IsA("ImageButton") then
+		btn.ImageTransparency = 0
+	end
+
+	for _, d in ipairs(btn:GetDescendants()) do
+		if d:IsA("TextLabel") or d:IsA("TextButton") then
+			d.Text = "FREE"
+			d.TextTransparency = 0
+			d.TextColor3 = COLORS.TEXT
+			d.ZIndex = 999999
+		end
+
+		if d:IsA("ImageLabel") or d:IsA("ImageButton") then
+			d.ImageTransparency = 0
+			d.ZIndex = 999999
+		end
+
+		if d:IsA("GuiObject") then
+			d.Visible = true
+		end
+	end
+end
+
+local function applyColor(btn, color)
+	if btn:IsA("GuiObject") then
+		tween(btn, {
+			BackgroundColor3 = color
+		})
+	end
+
+	for _, d in ipairs(btn:GetDescendants()) do
+		if d:IsA("GuiObject") then
+			tween(d, {
+				BackgroundColor3 = color
+			})
+		end
+
+		if d:IsA("ImageLabel") or d:IsA("ImageButton") then
+			tween(d, {
+				ImageColor3 = color
+			})
+		end
+	end
+end
+
+-- =========================
+-- CREATE BUTTON
+-- =========================
+
+local freeButton = Instance.new("TextButton")
+
+freeButton.Name = "FreeButton"
+freeButton.Parent = rightSide
+
+freeButton.Size = UDim2.new(0, 120, 0, 42)
+freeButton.Position = UDim2.new(1, -130, 0, 5)
+
+freeButton.AnchorPoint = Vector2.new(0, 0)
+
+freeButton.Text = "FREE"
+freeButton.TextScaled = true
+freeButton.Font = Enum.Font.GothamBold
+
+styleButton(freeButton)
+
+print("[SafeFreeButton] Free button created.")
+
+-- =========================
+-- HOVER EFFECTS
+-- =========================
+
+freeButton.MouseEnter:Connect(function()
+	applyColor(freeButton, COLORS.HOVER)
+end)
+
+freeButton.MouseLeave:Connect(function()
+	applyColor(freeButton, COLORS.IDLE)
+end)
+
+-- =========================
+-- SAFE CLICK
+-- =========================
+
+freeButton.Activated:Connect(function()
+
+	applyColor(freeButton, COLORS.PRESSED)
+
+	print("non harmful button pressed!")
+
+	task.wait(0.15)
+
+	applyColor(freeButton, COLORS.IDLE)
+end)
+
+print("[SafeFreeButton] Safe version running.")
