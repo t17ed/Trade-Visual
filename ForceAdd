@@ -1,14 +1,3 @@
--- ┌──────────────────────────────────────────────────────────────────┐
--- │  Fly  •  Save/Load  •  Speed Slider  •  Wall Toggle             │
--- │  •  Custom Speed Keybind  •  Beams  •  World Fade               │
--- │  LocalScript → StarterPlayerScripts                             │
--- │                                                                  │
--- │  BEAMS: green → your delivery (auto-sets load position)         │
--- │         red   → best stolen/fusing pet                          │
--- │         blue highlight on best pet model                        │
--- │  WORLD FADE: reduces opacity of Plots + AnimalPodiums           │
--- └──────────────────────────────────────────────────────────────────┘
-
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -554,7 +543,7 @@ local titleLbl = Instance.new("TextLabel")
 titleLbl.Size = UDim2.new(1,-20,1,0); titleLbl.Position = UDim2.new(0,20,0,0)
 titleLbl.BackgroundTransparency = 1; titleLbl.TextColor3 = Color3.fromRGB(228,228,242)
 titleLbl.Font = Enum.Font.GothamBold; titleLbl.TextSize = 14
-titleLbl.Text = "✦  Fly Tools"
+titleLbl.Text = "✦  Noclip + Fly Bypass"
 titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 titleLbl.Parent = tbar
 
@@ -613,7 +602,7 @@ end
 -- ============================================================
 --  CORE BUTTONS  (orders 1-3)
 -- ============================================================
-flyBtn          = makeBtn("🔮  Fly: OFF",       Color3.fromRGB(52,  52,  80), 1)
+flyBtn          = makeBtn("🌴  Fly: OFF",       Color3.fromRGB(52,  52,  80), 1)
 local saveBtn   = makeBtn("📍  Save Position",  Color3.fromRGB(38, 115,  82), 2)
 local loadBtn   = makeBtn("▶  Load Position",  Color3.fromRGB(76,  50, 162), 3)
 
@@ -623,7 +612,7 @@ local loadBtn   = makeBtn("▶  Load Position",  Color3.fromRGB(76,  50, 162), 3
 makeDivider("⚙  SETTINGS", 4)
 
 -- Speed slider (order 5)
-local SPEED_MIN = 5; local SPEED_MAX = 300
+local SPEED_MIN = 5; local SPEED_MAX = 40
 
 local sliderFrame = Instance.new("Frame")
 sliderFrame.Size = UDim2.new(1,0,0,46); sliderFrame.BackgroundTransparency = 1
@@ -687,7 +676,7 @@ wallToggleBtn.Size = UDim2.new(1,0,0,32)
 wallToggleBtn.BackgroundColor3 = WALL_ON_COL
 wallToggleBtn.TextColor3 = Color3.new(1,1,1)
 wallToggleBtn.Font = Enum.Font.GothamSemibold; wallToggleBtn.TextSize = 12
-wallToggleBtn.Text = "🧱  Wall Slow: ON  (10 st/s)"
+wallToggleBtn.Text = "Noclip Helper: ON  (10 st/s)"
 wallToggleBtn.BorderSizePixel = 0; wallToggleBtn.AutoButtonColor = false
 wallToggleBtn.LayoutOrder = 6; wallToggleBtn.Parent = body
 Instance.new("UICorner", wallToggleBtn).CornerRadius = UDim.new(0, 6)
@@ -695,10 +684,10 @@ Instance.new("UICorner", wallToggleBtn).CornerRadius = UDim.new(0, 6)
 wallToggleBtn.MouseButton1Click:Connect(function()
     wallSlowEnabled = not wallSlowEnabled
     if wallSlowEnabled then
-        wallToggleBtn.Text = "🧱  Wall Slow: ON  (10 st/s)"
+        wallToggleBtn.Text = "Noclip Helper: ON  (10 st/s)"
         TweenService:Create(wallToggleBtn,TweenInfo.new(0.18),{BackgroundColor3=WALL_ON_COL}):Play()
     else
-        wallToggleBtn.Text = "🧱  Wall Slow: OFF"
+        wallToggleBtn.Text = "Noclip Helper: OFF"
         TweenService:Create(wallToggleBtn,TweenInfo.new(0.18),{BackgroundColor3=WALL_OFF_COL}):Play()
     end
 end)
@@ -707,7 +696,7 @@ end)
 local csHeader = Instance.new("TextLabel")
 csHeader.Size = UDim2.new(1,0,0,16); csHeader.BackgroundTransparency = 1
 csHeader.TextColor3 = Color3.fromRGB(80,80,110); csHeader.Font = Enum.Font.GothamBold
-csHeader.TextSize = 10; csHeader.Text = "CUSTOM SPEED KEYBIND"
+csHeader.TextSize = 10; csHeader.Text = "BYPASS SPEED KEYBIND"
 csHeader.TextXAlignment = Enum.TextXAlignment.Left
 csHeader.LayoutOrder = 7; csHeader.Parent = body
 
@@ -748,7 +737,7 @@ beamsBtn.Size = UDim2.new(1,0,0,32)
 beamsBtn.BackgroundColor3 = BEAMS_OFF_COL
 beamsBtn.TextColor3 = Color3.new(1,1,1)
 beamsBtn.Font = Enum.Font.GothamSemibold; beamsBtn.TextSize = 12
-beamsBtn.Text = "🔆  Beams: OFF"
+beamsBtn.Text = "ShowBase: OFF"
 beamsBtn.BorderSizePixel = 0; beamsBtn.AutoButtonColor = false
 beamsBtn.LayoutOrder = 10; beamsBtn.Parent = body
 Instance.new("UICorner", beamsBtn).CornerRadius = UDim.new(0, 6)
@@ -934,12 +923,12 @@ end)
 beamsBtn.MouseButton1Click:Connect(function()
     beamsEnabled = not beamsEnabled
     if beamsEnabled then
-        beamsBtn.Text = "🔆  Beams: ON"
+        beamsBtn.Text = "BaseBeams: ON"
         TweenService:Create(beamsBtn,TweenInfo.new(0.18),
             {BackgroundColor3=BEAMS_ON_COL}):Play()
         startBeamLoop()
     else
-        beamsBtn.Text = "🔆  Beams: OFF"
+        beamsBtn.Text = "BaseBeams: OFF"
         TweenService:Create(beamsBtn,TweenInfo.new(0.18),
             {BackgroundColor3=BEAMS_OFF_COL}):Play()
         clearBeams()
@@ -953,12 +942,12 @@ end)
 fadeBtn.MouseButton1Click:Connect(function()
     fadeEnabled = not fadeEnabled
     if fadeEnabled then
-        fadeBtn.Text = "👁  World Fade: ON"
+        fadeBtn.Text = "XRay Bases: ON"
         TweenService:Create(fadeBtn,TweenInfo.new(0.18),
             {BackgroundColor3=FADE_ON_COL}):Play()
         pcall(applyFade, 0.5)
     else
-        fadeBtn.Text = "👁  World Fade: OFF"
+        fadeBtn.Text = "XRay Bases: OFF"
         TweenService:Create(fadeBtn,TweenInfo.new(0.18),
             {BackgroundColor3=FADE_OFF_COL}):Play()
         pcall(applyFade, 0)   -- restore to 0 = normal visibility
