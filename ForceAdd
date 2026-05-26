@@ -1,0 +1,152 @@
+-- AutoFire: CoreGui > [hash] > FirstChild > Home > SearchBar > Button
+-- Fires the button once every time it appears on screen (Visible = true or re-parented in)
+ 
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+ 
+local HASH_NAME   = "34c0a57ced5a1ca4eea33b35be5bc2c843100dac009b9cf5ccb64d0880ef46b1"
+ 
+-- ─────────────────────────────────────────────
+-- Force-press: every available signal + :Activate()
+-- ─────────────────────────────────────────────
+local function forcePress(btn)
+    -- Guard: element must still be in the tree
+    if not btn or not btn.Parent then return end
+ 
+    -- 1. The cleanest official path
+    pcall(function() btn:Activate() end)
+ 
+    -- 2. Direct signal fires (works even when :Activate() is blocked)
+    pcall(function() btn.Activated:Fire() end)
+    pcall(function() btn.MouseButton1Click:Fire() end)
+    pcall(function() btn.MouseButton1Down:Fire(0, 0) end)
+    pcall(function() btn.MouseButton1Up:Fire(0, 0)   end)
+end
+ 
+-- ─────────────────────────────────────────────
+-- Walk the path and return the Button (or nil)
+-- ─────────────────────────────────────────────
+local function resolveButton()
+    -- Step 1 – named hash frame inside CoreGui
+    local hashFrame = CoreGui:FindFirstChild(HASH_NAME)
+    if not hashFrame then return nil end
+ 
+    -- Step 2 – THE first child of that frame
+    local children = hashFrame:GetChildren()
+    if #children == 0 then return nil end
+    local firstChild = children[1]
+ 
+    -- Step 3 – Home > SearchBar > Button
+    local home      = firstChild:FindFirstChild("Home")
+    if not home then return nil end
+ 
+    local searchBar = home:FindFirstChild("SearchBar")
+    if not searchBar then return nil end
+ 
+    local button    = searchBar:FindFirstChild("Button")
+    return button  -- may be nil if not yet present
+end
+ 
+-- ─────────────────────────────────────────────
+-- Per-button watcher: fires once each time
+-- the button's Visible flips true  OR
+-- its AbsolutePosition lands on-screen.
+-- ─────────────────────────────────────────────
+local watchedButtons = {}   -- [button] = true
+ 
+local function watchButton(btn)
+    if watchedButtons[btn] then return end
+    watchedButtons[btn] = true
+ 
+    local lastVisible = btn.Visible
+ 
+    -- Fire immediately if already on-screen
+    if btn.Visible and btn.AbsoluteSize.X > 0 then
+        task.defer(forcePress, btn)
+    end
+ 
+    -- React to Visible toggling on
+    btn:GetPropertyChangedSignal("Visible"):Connect(function()
+        if btn.Visible and not lastVisible then
+            task.defer(forcePress, btn)
+        end
+        lastVisible = btn.Visible
+    end)
+ 
+    -- React to the element moving onto the screen area
+    btn:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+        if btn.Visible then
+            local pos = btn.AbsolutePosition
+            if pos.X >= 0 and pos.Y >= 0 and btn.AbsoluteSize.X > 0 then
+                task.defer(forcePress, btn)
+            end
+        end
+    end)
+ 
+    -- Clean up the watcher if the button is removed
+    btn.AncestryChanged:Connect(function()
+        if not btn:IsDescendantOf(game) then
+            watchedButtons[btn] = nil
+        end
+    end)
+end
+ 
+-- ─────────────────────────────────────────────
+-- Top-level presence loop:
+-- Polls for the hash frame & button appearing,
+-- then attaches deep DescendantAdded listeners
+-- so nothing slips through.
+-- ─────────────────────────────────────────────
+local function startWatching()
+    -- Attempt to hook up immediately
+    local btn = resolveButton()
+    if btn then watchButton(btn) end
+ 
+    -- Watch for the hash container being added to CoreGui
+    CoreGui.ChildAdded:Connect(function(child)
+        if child.Name == HASH_NAME then
+            -- Give children a frame to populate
+            task.wait()
+            local b = resolveButton()
+            if b then watchButton(b) end
+ 
+            -- Also watch for late-arriving descendants
+            child.DescendantAdded:Connect(function(desc)
+                if desc.Name == "Button" then
+                    task.defer(function()
+                        local b2 = resolveButton()
+                        if b2 then watchButton(b2) end
+                    end)
+                end
+            end)
+        end
+    end)
+ 
+    -- In case the hash frame already exists, attach DescendantAdded to it too
+    local existingHash = CoreGui:FindFirstChild(HASH_NAME)
+    if existingHash then
+        existingHash.DescendantAdded:Connect(function(desc)
+            if desc.Name == "Button" then
+                task.defer(function()
+                    local b = resolveButton()
+                    if b then watchButton(b) end
+                end)
+            end
+        end)
+    end
+ 
+    -- Fallback heartbeat poll — catches anything the events miss
+    local pollConn
+    pollConn = RunService.Heartbeat:Connect(function()
+        local b = resolveButton()
+        if b and not watchedButtons[b] then
+            watchButton(b)
+        end
+    end)
+end
+ 
+-- ─────────────────────────────────────────────
+-- Entry point
+-- ─────────────────────────────────────────────
+startWatching()
+ 
