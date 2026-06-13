@@ -1,11 +1,12 @@
 -- GamepassesSideButton (LocalScript)
 -- Place in: StarterPlayer > StarterPlayerScripts
--- Duplicates the Brainrots side button into "Gamepasses", drives its hover/click tween
--- from a bottom-left slider panel, and clears the "Your" list when clicked.
+-- Duplicates the Brainrots side button into a visible "Gamepasses" button, drives its
+-- hover/click tween from a bottom-left slider panel, and clears the "Your" list on click.
+-- Works even when the trade GUI is hidden, and re-applies if the GUI is rebuilt.
 
-local Players            = game:GetService("Players")
-local TweenService       = game:GetService("TweenService")
-local UserInputService   = game:GetService("UserInputService")
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -18,234 +19,280 @@ local config = {
 
 local CLICK_COLOR = Color3.fromRGB(81, 158, 86)
 
--- Resolve the GUI path; warn with the exact missing node if anything is absent.
-local function resolve()
-	local screen = playerGui:WaitForChild("TradeLiveTrade", 10)
-	if not screen then warn("[Gamepasses] PlayerGui.TradeLiveTrade not found"); return nil end
-
-	local root = screen:WaitForChild("TradeLiveTrade", 10)
-	if not root then warn("[Gamepasses] TradeLiveTrade.TradeLiveTrade not found"); return nil end
-
-	local sideButtons = root:WaitForChild("Side Buttons", 10)
-	if not sideButtons then warn("[Gamepasses] 'Side Buttons' not found under TradeLiveTrade"); return nil end
-
-	local brainrots = sideButtons:WaitForChild("Brainrots", 10)
-	if not brainrots then warn("[Gamepasses] 'Brainrots' not found under Side Buttons"); return nil end
-
-	local your = root:WaitForChild("Your", 10)
-	if not your then warn("[Gamepasses] 'Your' not found under TradeLiveTrade"); return nil end
-
-	local scrolling = your:WaitForChild("ScrollingFrame", 10)
-	if not scrolling then warn("[Gamepasses] 'ScrollingFrame' not found under Your"); return nil end
-
-	return { sideButtons = sideButtons, brainrots = brainrots, scrolling = scrolling }
-end
-
-local refs = resolve()
-if not refs then return end
-
--- Duplicate Brainrots -> Gamepasses (reuse if a previous run already made it)
-local gamepasses = refs.sideButtons:FindFirstChild("Gamepasses")
-if not gamepasses then
-	gamepasses = refs.brainrots:Clone()
-	gamepasses.Name = "Gamepasses"
-	gamepasses.LayoutOrder = refs.brainrots.LayoutOrder + 1  -- sits right after Brainrots if a list layout is used
-	gamepasses.Parent = refs.sideButtons
-end
-
--- Set the label text
-local txt = gamepasses:FindFirstChild("Txt")
-if txt and (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) then
-	txt.Text = "Gamepasses"
-else
-	warn("[Gamepasses] 'Txt' label not found inside Gamepasses; text not set")
-end
-
--- UIScale keeps the grow/shrink from disturbing sibling layout
-local uiScale = gamepasses:FindFirstChildOfClass("UIScale")
-if not uiScale then
-	uiScale = Instance.new("UIScale")
-	uiScale.Scale = 1
-	uiScale.Parent = gamepasses
+-- Quiet poll-wait: finds a child even if it streams in late, without console noise
+-- and WITHOUT caring whether anything is Visible.
+local function quietWait(parent, name, timeout)
+	timeout = timeout or 30
+	local t0 = os.clock()
+	repeat
+		local c = parent:FindFirstChild(name)
+		if c then return c end
+		task.wait(0.1)
+	until os.clock() - t0 >= timeout
+	return nil
 end
 
 ----------------------------------------------------------------------
--- Slider panel (bottom-left)
+-- Slider panel (bottom-left) -- built once, independent of the trade GUI
 ----------------------------------------------------------------------
-local sliderGui = Instance.new("ScreenGui")
-sliderGui.Name = "GamepassTweenControls"
-sliderGui.ResetOnSpawn = false
-sliderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-sliderGui.Parent = playerGui
+local function buildSliderPanel()
+	if playerGui:FindFirstChild("GamepassTweenControls") then return end
 
-local panel = Instance.new("Frame")
-panel.Name = "Panel"
-panel.AnchorPoint = Vector2.new(0, 1)
-panel.Position = UDim2.new(0, 12, 1, -12)   -- bottom-left
-panel.Size = UDim2.new(0, 240, 0, 96)
-panel.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
-panel.BackgroundTransparency = 0.1
-panel.BorderSizePixel = 0
-panel.Parent = sliderGui
-do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = panel
-	local p = Instance.new("UIPadding")
-	p.PaddingTop = UDim.new(0, 8); p.PaddingBottom = UDim.new(0, 8)
-	p.PaddingLeft = UDim.new(0, 10); p.PaddingRight = UDim.new(0, 10); p.Parent = panel
-	local l = Instance.new("UIListLayout")
-	l.FillDirection = Enum.FillDirection.Vertical
-	l.Padding = UDim.new(0, 8)
-	l.SortOrder = Enum.SortOrder.LayoutOrder; l.Parent = panel
-end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "GamepassTweenControls"
+	gui.ResetOnSpawn = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = playerGui
 
--- Builds one labelled slider; onChange(value) fires continuously while dragging.
-local function makeSlider(order, labelText, minV, maxV, startV, onChange)
-	local row = Instance.new("Frame")
-	row.BackgroundTransparency = 1
-	row.Size = UDim2.new(1, 0, 0, 34)
-	row.LayoutOrder = order
-	row.Parent = panel
-
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.new(1, 0, 0, 14)
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 12
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextColor3 = Color3.fromRGB(235, 235, 235)
-	label.Parent = row
-
-	local track = Instance.new("Frame")
-	track.Name = "Track"
-	track.AnchorPoint = Vector2.new(0, 1)
-	track.Position = UDim2.new(0, 0, 1, 0)
-	track.Size = UDim2.new(1, 0, 0, 6)
-	track.BackgroundColor3 = Color3.fromRGB(70, 70, 78)
-	track.BorderSizePixel = 0
-	track.Parent = row
-	do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = track end
-
-	local fill = Instance.new("Frame")
-	fill.BackgroundColor3 = CLICK_COLOR
-	fill.BorderSizePixel = 0
-	fill.Size = UDim2.new(0, 0, 1, 0)
-	fill.Parent = track
-	do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = fill end
-
-	local handle = Instance.new("TextButton")
-	handle.Text = ""
-	handle.AutoButtonColor = false
-	handle.AnchorPoint = Vector2.new(0.5, 0.5)
-	handle.Position = UDim2.new(0, 0, 0.5, 0)
-	handle.Size = UDim2.new(0, 14, 0, 14)
-	handle.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
-	handle.Parent = track
-	do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = handle end
-
-	local function setFromAlpha(alpha)
-		alpha = math.clamp(alpha, 0, 1)
-		local value = minV + (maxV - minV) * alpha
-		handle.Position = UDim2.new(alpha, 0, 0.5, 0)
-		fill.Size = UDim2.new(alpha, 0, 1, 0)
-		label.Text = string.format("%s: %.2f", labelText, value)
-		onChange(value)
+	local panel = Instance.new("Frame")
+	panel.Name = "Panel"
+	panel.AnchorPoint = Vector2.new(0, 1)
+	panel.Position = UDim2.new(0, 12, 1, -12)   -- bottom-left
+	panel.Size = UDim2.new(0, 240, 0, 96)
+	panel.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+	panel.BackgroundTransparency = 0.1
+	panel.BorderSizePixel = 0
+	panel.Parent = gui
+	do
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = panel
+		local p = Instance.new("UIPadding")
+		p.PaddingTop = UDim.new(0, 8); p.PaddingBottom = UDim.new(0, 8)
+		p.PaddingLeft = UDim.new(0, 10); p.PaddingRight = UDim.new(0, 10); p.Parent = panel
+		local l = Instance.new("UIListLayout")
+		l.FillDirection = Enum.FillDirection.Vertical
+		l.Padding = UDim.new(0, 8)
+		l.SortOrder = Enum.SortOrder.LayoutOrder; l.Parent = panel
 	end
-	setFromAlpha((startV - minV) / (maxV - minV))
 
-	local dragging = false
-	local function updateFromX(x)
-		setFromAlpha((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1))
-	end
-	local function press(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			updateFromX(input.Position.X)
+	local function makeSlider(order, labelText, minV, maxV, startV, onChange)
+		local row = Instance.new("Frame")
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 34)
+		row.LayoutOrder = order
+		row.Parent = panel
+
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.new(1, 0, 0, 14)
+		label.Font = Enum.Font.GothamMedium
+		label.TextSize = 12
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextColor3 = Color3.fromRGB(235, 235, 235)
+		label.Parent = row
+
+		local track = Instance.new("Frame")
+		track.Name = "Track"
+		track.AnchorPoint = Vector2.new(0, 1)
+		track.Position = UDim2.new(0, 0, 1, 0)
+		track.Size = UDim2.new(1, 0, 0, 6)
+		track.BackgroundColor3 = Color3.fromRGB(70, 70, 78)
+		track.BorderSizePixel = 0
+		track.Parent = row
+		do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = track end
+
+		local fill = Instance.new("Frame")
+		fill.BackgroundColor3 = CLICK_COLOR
+		fill.BorderSizePixel = 0
+		fill.Size = UDim2.new(0, 0, 1, 0)
+		fill.Parent = track
+		do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = fill end
+
+		local handle = Instance.new("TextButton")
+		handle.Text = ""
+		handle.AutoButtonColor = false
+		handle.AnchorPoint = Vector2.new(0.5, 0.5)
+		handle.Position = UDim2.new(0, 0, 0.5, 0)
+		handle.Size = UDim2.new(0, 14, 0, 14)
+		handle.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+		handle.Parent = track
+		do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = handle end
+
+		local function setFromAlpha(alpha)
+			alpha = math.clamp(alpha, 0, 1)
+			local value = minV + (maxV - minV) * alpha
+			handle.Position = UDim2.new(alpha, 0, 0.5, 0)
+			fill.Size = UDim2.new(alpha, 0, 1, 0)
+			label.Text = string.format("%s: %.2f", labelText, value)
+			onChange(value)
 		end
-	end
+		setFromAlpha((startV - minV) / (maxV - minV))
 
-	handle.InputBegan:Connect(press)
-	track.InputBegan:Connect(press)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			updateFromX(input.Position.X)
+		local dragging = false
+		local function updateFromX(x)
+			setFromAlpha((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1))
 		end
-	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-end
-
-makeSlider(1, "Tween Size", config.sizeMin, config.sizeMax, config.size, function(v) config.size = v end)
-makeSlider(2, "Tween Time", config.timeMin, config.timeMax, config.time, function(v) config.time = v end)
-
-----------------------------------------------------------------------
--- Hover / click tween
-----------------------------------------------------------------------
-local activeTween = nil
-local hovering = false
-
--- Cancels any in-flight tween first; onComplete only fires on a real finish (not on Cancel).
-local function tweenScale(target, duration, onComplete)
-	if activeTween then activeTween:Cancel() end
-	local tw = TweenService:Create(
-		uiScale,
-		TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Scale = target }
-	)
-	activeTween = tw
-	if onComplete then
-		tw.Completed:Connect(function(state)
-			if state == Enum.PlaybackState.Completed then onComplete() end
-		end)
-	end
-	tw:Play()
-end
-
-gamepasses.MouseEnter:Connect(function()
-	hovering = true
-	tweenScale(config.size, config.time)
-end)
-
--- Only untween (return to normal size) when the mouse actually leaves the button.
-gamepasses.MouseLeave:Connect(function()
-	hovering = false
-	tweenScale(1, config.time)
-end)
-
-local function clearYourList()
-	local ok, err = pcall(function()
-		for _, child in ipairs(refs.scrolling:GetChildren()) do
-			if child.Name ~= "Template" and not child:IsA("UIGridLayout") then
-				child:Destroy()
+		local function pressBegin(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				updateFromX(input.Position.X)
 			end
 		end
+
+		handle.InputBegan:Connect(pressBegin)
+		track.InputBegan:Connect(pressBegin)
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				updateFromX(input.Position.X)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
+	end
+
+	makeSlider(1, "Tween Size", config.sizeMin, config.sizeMax, config.size, function(v) config.size = v end)
+	makeSlider(2, "Tween Time", config.timeMin, config.timeMax, config.time, function(v) config.time = v end)
+end
+
+----------------------------------------------------------------------
+-- Place the clone so it never sits on top of Brainrots (the usual "it didn't clone")
+----------------------------------------------------------------------
+local function placeClone(clone, sibling)
+	-- If the parent uses any UI layout, just order the clone after Brainrots.
+	if clone.Parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		clone.LayoutOrder = sibling.LayoutOrder + 1
+		return
+	end
+	-- No layout: stack it directly below Brainrots. AbsoluteSize works even when hidden;
+	-- fall back to the Size offset if the GUI hasn't been measured yet.
+	local stepY = sibling.AbsoluteSize.Y
+	if stepY <= 0 then stepY = sibling.Size.Y.Offset end
+	local p = sibling.Position
+	clone.Position = UDim2.new(p.X.Scale, p.X.Offset, p.Y.Scale, p.Y.Offset + stepY + 6)
+end
+
+----------------------------------------------------------------------
+-- Build / configure the Gamepasses button under a given inner TradeLiveTrade frame
+----------------------------------------------------------------------
+local function setup(root)
+	local sideButtons = quietWait(root, "Side Buttons", 30)
+	if not sideButtons then warn("[Gamepasses] 'Side Buttons' not found under TradeLiveTrade"); return end
+
+	local brainrots = quietWait(sideButtons, "Brainrots", 30)
+	if not brainrots then warn("[Gamepasses] 'Brainrots' not found under Side Buttons"); return end
+
+	local your = quietWait(root, "Your", 30)
+	if not your then warn("[Gamepasses] 'Your' not found under TradeLiveTrade"); return end
+
+	local scrolling = quietWait(your, "ScrollingFrame", 30)
+	if not scrolling then warn("[Gamepasses] 'ScrollingFrame' not found under Your"); return end
+
+	-- Clone Brainrots -> Gamepasses (reuse if a previous run already made it)
+	local gamepasses = sideButtons:FindFirstChild("Gamepasses")
+	if not gamepasses then
+		gamepasses = brainrots:Clone()
+		gamepasses.Name = "Gamepasses"
+		gamepasses.Parent = sideButtons
+		placeClone(gamepasses, brainrots)
+	end
+
+	-- Keep it visible regardless of menu state (the change is made even when hidden)
+	gamepasses.Visible = true
+
+	-- Set the label text
+	local txt = gamepasses:FindFirstChild("Txt")
+	if txt and (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) then
+		txt.Visible = true
+		txt.Text = "Gamepasses"
+	else
+		warn("[Gamepasses] 'Txt' label not found inside Gamepasses; text not set")
+	end
+
+	-- Wire behaviour only once per button instance
+	if gamepasses:GetAttribute("GP_Wired") then return end
+	gamepasses:SetAttribute("GP_Wired", true)
+
+	-- UIScale keeps the grow/shrink from disturbing sibling layout
+	local uiScale = gamepasses:FindFirstChildOfClass("UIScale")
+	if not uiScale then
+		uiScale = Instance.new("UIScale")
+		uiScale.Scale = 1
+		uiScale.Parent = gamepasses
+	end
+
+	local activeTween, hovering = nil, false
+
+	-- Cancels any in-flight tween; onComplete only fires on a real finish (not on Cancel).
+	local function tweenScale(target, duration, onComplete)
+		if activeTween then activeTween:Cancel() end
+		local tw = TweenService:Create(
+			uiScale,
+			TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Scale = target }
+		)
+		activeTween = tw
+		if onComplete then
+			tw.Completed:Connect(function(state)
+				if state == Enum.PlaybackState.Completed then onComplete() end
+			end)
+		end
+		tw:Play()
+	end
+
+	gamepasses.MouseEnter:Connect(function()
+		hovering = true
+		tweenScale(config.size, config.time)
 	end)
-	if not ok then
-		warn("[Gamepasses] Failed clearing Your.ScrollingFrame: " .. tostring(err))
+
+	-- Only untween (return to normal size) when the mouse actually leaves the button.
+	gamepasses.MouseLeave:Connect(function()
+		hovering = false
+		tweenScale(1, config.time)
+	end)
+
+	local function clearYourList()
+		local ok, err = pcall(function()
+			for _, child in ipairs(scrolling:GetChildren()) do
+				if child.Name ~= "Template" and not child:IsA("UIGridLayout") then
+					child:Destroy()
+				end
+			end
+		end)
+		if not ok then warn("[Gamepasses] Failed clearing Your.ScrollingFrame: " .. tostring(err)) end
+	end
+
+	local function onClick()
+		gamepasses.BackgroundColor3 = CLICK_COLOR
+
+		-- Click bounce: undo to base scale, then retween back up; stays enlarged until MouseLeave.
+		local half = math.max(config.time * 0.5, 0.03)
+		tweenScale(1, half, function()
+			if hovering then tweenScale(config.size, half) end
+		end)
+
+		clearYourList()
+	end
+
+	-- Works whether Gamepasses is a Button or a plain Frame.
+	if gamepasses:IsA("GuiButton") then
+		gamepasses.MouseButton1Click:Connect(onClick)
+	else
+		gamepasses.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				onClick()
+			end
+		end)
 	end
 end
 
-local function onClick()
-	gamepasses.BackgroundColor3 = CLICK_COLOR
-
-	-- Click bounce: undo to base scale, then retween back up; stays enlarged until MouseLeave.
-	local half = math.max(config.time * 0.5, 0.03)
-	tweenScale(1, half, function()
-		if hovering then tweenScale(config.size, half) end
-	end)
-
-	clearYourList()
+----------------------------------------------------------------------
+-- Run now, and re-run if the trade GUI is (re)created later
+----------------------------------------------------------------------
+local function tryApply()
+	local screen = quietWait(playerGui, "TradeLiveTrade", 60)
+	if not screen then warn("[Gamepasses] PlayerGui.TradeLiveTrade not found"); return end
+	local root = quietWait(screen, "TradeLiveTrade", 60)
+	if not root then warn("[Gamepasses] TradeLiveTrade.TradeLiveTrade not found"); return end
+	setup(root)
 end
 
--- Works whether Gamepasses is a Button or a plain Frame.
-if gamepasses:IsA("GuiButton") then
-	gamepasses.MouseButton1Click:Connect(onClick)
-else
-	gamepasses.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			onClick()
-		end
-	end)
-end
+buildSliderPanel()
+task.spawn(tryApply)
+
+playerGui.ChildAdded:Connect(function(child)
+	if child.Name == "TradeLiveTrade" then
+		task.spawn(tryApply)
+	end
+end)
