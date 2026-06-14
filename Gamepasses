@@ -204,8 +204,6 @@ description.Text =
 --// SETTINGS TEXT
 task.spawn(function()
 
-task.spawn(function()
-
 	while true do
 
 		pcall(function()
@@ -228,39 +226,6 @@ task.spawn(function()
 		end)
 
 		task.wait(1)
-	end
-end)
-
-	local connected = false
-
-	while true do
-
-		pcall(function()
-
-			local functionText = playerGui
-				:WaitForChild("Settings")
-				:WaitForChild("Settings")
-				:WaitForChild("Content")
-				:WaitForChild("ScrollingFrame")
-				:WaitForChild("VFX")
-				:WaitForChild("Function")
-
-			functionText.Text = "Gamepass Trading"
-
-			if not connected then
-
-				connected = true
-
-				functionText:GetPropertyChangedSignal("Text"):Connect(function()
-
-					if functionText.Text ~= "Gamepass Trading" then
-						functionText.Text = "Gamepass Trading"
-					end
-				end)
-			end
-		end)
-
-		task.wait()
 	end
 end)
 
