@@ -3,43 +3,47 @@
 --====================================================================
 --  Put this in a LocalScript (e.g. StarterPlayer > StarterPlayerScripts).
 --
---  This is PURELY VISUAL. It only edits GUI on the client running it.
---  Nothing here is replicated to the server or to other players, so it
---  cannot change another player's screen, trade, or inventory.
+--  PURELY VISUAL. It only edits GUI on the client running it. Nothing
+--  is replicated to the server or other players. No executor functions.
 --
---  All executor-only functions from the old version were removed:
---    * getconnections / firing other scripts' signals  -> GONE
---    * :Activate() spoof-clicking the real trade button -> GONE
---    * readfile / isfile / writefile (file saving)      -> GONE
---    * setclipboard (website copy)                       -> GONE
---    * the whole auto-accept system that read the OTHER  -> GONE
---      player's ReadyButton / ACCEPT state
---  None of those work in a normal LocalScript anyway.
+--  Behaviour:
+--    * the "Gears" side button's Txt is renamed to "Gears + Gamepasses"
+--    * spawned cards are shown ONLY while that button is green
+--    * the real trade selection slots are left untouched
+--    * when the ready button reads "ACCEPT": cards reset to default
+--      colour and stop responding to clicks (read-only, never fired)
 --====================================================================
 
 --// SERVICES
-local Players          = game:GetService("Players")
-local UIS              = game:GetService("UserInputService")
-local RunService       = game:GetService("RunService")
-local TweenService     = game:GetService("TweenService")
-local Debris           = game:GetService("Debris")
+local Players      = game:GetService("Players")
+local UIS          = game:GetService("UserInputService")
+local RunService   = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Debris       = game:GetService("Debris")
 
 --// PLAYER
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 --// TRADE UI REFERENCES
+--  TradeLiveTrade > TradeLiveTrade > Your > Side Buttons > Gears > Txt
 local rootGui        = playerGui:WaitForChild("TradeLiveTrade")
 local main           = rootGui:WaitForChild("TradeLiveTrade")
-local sideButtons    = main:WaitForChild("Side Buttons")
-local gears          = sideButtons:WaitForChild("Gears")
-local header         = main:WaitForChild("Header")
-local txts           = header:WaitForChild("Txts")
-local txt1           = txts:WaitForChild("Txt1")
 local yourFrame      = main:WaitForChild("Your")
+local sideButtons    = yourFrame:WaitForChild("Side Buttons")
+local gears          = sideButtons:WaitForChild("Gears")
+local gearsTxt       = gears:WaitForChild("Txt")
 local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
 local template       = scrollingFrame:WaitForChild("Template")
 template.Visible = false
+
+--// RENAME THE GEARS BUTTON AND KEEP IT SET
+gearsTxt.Text = "Gears + Gamepasses"
+gearsTxt:GetPropertyChangedSignal("Text"):Connect(function()
+    if gearsTxt.Text ~= "Gears + Gamepasses" then
+        gearsTxt.Text = "Gears + Gamepasses"
+    end
+end)
 
 --// CONFIRMATION UI
 local confirmationUI  = playerGui:WaitForChild("Confirmation")
@@ -55,14 +59,10 @@ local notificationUI   = notificationRoot:WaitForChild("Notification")
 local notifTemplate    = notificationUI:WaitForChild("Template")
 
 --// CONFIG
-local SHOW_COLOR       = Color3.fromRGB(81, 158, 86)   -- gears green -> show labels
-local HIDE_COLOR       = Color3.fromRGB(64, 86, 97)    -- gears grey  -> hide labels
-local SELECTION_KEYWORD = "selection"
-local GEARS_LABEL_NAME    = "GearsLabel"
-local GAMEPASS_LABEL_NAME = "GamepassesLabel"
+local SHOW_COLOR = Color3.fromRGB(81, 158, 86)   -- gears green -> cards (gamepasses) shown
 
---// LABEL TEXT SIZE (driven by the debug slider)
-local labelTextSize = 14          -- default (smaller than the original)
+--// GEARS-BUTTON TEXT SIZE (driven by the debug slider)
+local gearsTxtSize  = math.clamp(gearsTxt.TextSize, 8, 40)
 local MIN_TEXT_SIZE = 8
 local MAX_TEXT_SIZE = 40
 
@@ -75,15 +75,15 @@ local darkPurple   = Color3.fromRGB(28,18,40)
 local panelDark    = Color3.fromRGB(18,18,24)
 local softPink     = Color3.fromRGB(255,120,220)
 
---// TABLES
+--// STATE
 local adminPanels        = {}
 local removedPresets     = {}
 local pendingPanel       = nil
 local notificationCooldown = {}
-local spawnCount         = 0   -- ordering of spawned items under the Gamepasses label
+local spawnCount         = 0
 local acceptLocked       = false -- true once the ready button shows "ACCEPT"
 
---// PRESETS (unchanged)
+--// PRESETS
 local presets = {
     { Name = "Admin",      Image = "rbxassetid://139291316302932", Cash = "9,999 fake coins",     Title = "[🎁] Admin Panel" },
     { Name = "VIP",        Image = "rbxassetid://89326624889199",  Cash = "499 fake coins",       Title = "[🎁] VIP" },
@@ -150,31 +150,10 @@ local function showNotification(text, color)
     end)
 end
 
---// hide the real (empty) trade selection slots so only spawned items show
-local function hideSelections()
-    for _, v in ipairs(scrollingFrame:GetChildren()) do
-        if v:IsA("GuiObject") and v.Name:find("Selection") then
-            v.Visible = false
-        end
-    end
-end
-scrollingFrame.ChildAdded:Connect(function()
-    task.wait()
-    hideSelections()
-end)
-task.spawn(function()
-    while true do
-        hideSelections()
-        task.wait(0.03)
-    end
-end)
-
 --====================================================================
---  GEARS / GAMEPASSES LABELS  +  COLOR-GATED VISIBILITY
+--  CARD VISIBILITY  --  cards (gamepasses) show ONLY when the
+--  "Gears + Gamepasses" button is GREEN
 --====================================================================
-
-local gearsLabel    -- created on demand
-local gamepassLabel -- created on demand
 
 local function coloursMatch(a, b)
     local tol = 0.5 / 255
@@ -191,117 +170,47 @@ local function gearsIsColour(target)
     return false
 end
 
-local function setUnderlined(label, word)
-    if label:IsA("TextLabel") or label:IsA("TextButton") or label:IsA("TextBox") then
-        label.RichText = true
-        label.Text = "<u>" .. word .. "</u>"
-    end
-end
-
---// apply the current slider size to both labels
-local function applyTextSize()
-    for _, lbl in ipairs({ gearsLabel, gamepassLabel }) do
-        if lbl and lbl.Parent then
-            if lbl:IsA("TextLabel") or lbl:IsA("TextButton") or lbl:IsA("TextBox") then
-                lbl.TextScaled = false        -- so TextSize is respected
-                lbl.TextSize = labelTextSize
-            end
+-- show every (non-removed) card only when gears is green
+local function refreshCards()
+    local show = gearsIsColour(SHOW_COLOR)
+    for _, panel in ipairs(adminPanels) do
+        if panel and panel.Parent and not removedPresets[panel] then
+            panel.Visible = show
         end
     end
 end
 
-local function placeBelow(parent, target, item)
-    local layout = parent:FindFirstChildWhichIsA("UIListLayout")
-    if layout then
-        local targetOrder = target.LayoutOrder
-        for _, child in ipairs(parent:GetChildren()) do
-            if child ~= item and child:IsA("GuiObject") and child.LayoutOrder > targetOrder then
-                child.LayoutOrder += 1
-            end
-        end
-        item.LayoutOrder = targetOrder + 1
-    else
-        local height = target.AbsoluteSize.Y
-        if height <= 0 then height = target.Size.Y.Offset end
-        local tPos = target.Position
-        item.Position = UDim2.new(tPos.X.Scale, tPos.X.Offset, tPos.Y.Scale, tPos.Y.Offset + height + 4)
+-- debug slider target: size of the "Gears + Gamepasses" button text
+local function applyGearsTxtSize()
+    if gearsTxt:IsA("TextLabel") or gearsTxt:IsA("TextButton") or gearsTxt:IsA("TextBox") then
+        gearsTxt.TextScaled = false
+        gearsTxt.TextSize = gearsTxtSize
     end
 end
 
-local function buildLabels()
-    if not gearsIsColour(SHOW_COLOR) then return end
-
-    -- Gears label: above EVERYTHING (very low LayoutOrder)
-    gearsLabel = scrollingFrame:FindFirstChild(GEARS_LABEL_NAME)
-    if not gearsLabel then
-        gearsLabel = txt1:Clone()
-        gearsLabel.Name = GEARS_LABEL_NAME
-        gearsLabel.LayoutOrder = -1000000
-        setUnderlined(gearsLabel, "Gears")
-        gearsLabel.Parent = scrollingFrame
-    end
-
-    -- Gamepasses label: below the trade's selection slot
-    gamepassLabel = scrollingFrame:FindFirstChild(GAMEPASS_LABEL_NAME)
-    if not gamepassLabel then
-        for _, child in ipairs(scrollingFrame:GetChildren()) do
-            if child:IsA("GuiObject")
-                and child ~= gearsLabel
-                and string.find(string.lower(child.Name), SELECTION_KEYWORD, 1, true)
-            then
-                gamepassLabel = gearsLabel:Clone()
-                gamepassLabel.Name = GAMEPASS_LABEL_NAME
-                setUnderlined(gamepassLabel, "Gamepasses")
-                gamepassLabel.Parent = scrollingFrame
-                placeBelow(scrollingFrame, child, gamepassLabel)
-                break
-            end
-        end
-    end
-
-    applyTextSize()
-end
-
---// show on green, hide on grey (64,86,97), otherwise leave as-is
-local function updateVisibility()
-    if gearsIsColour(HIDE_COLOR) then
-        if gearsLabel then gearsLabel.Visible = false end
-        if gamepassLabel then gamepassLabel.Visible = false end
-    elseif gearsIsColour(SHOW_COLOR) then
-        buildLabels()
-        if gearsLabel then gearsLabel.Visible = true end
-        if gamepassLabel then gamepassLabel.Visible = true end
-    end
-end
-
-buildLabels()
-updateVisibility()
-gears:GetPropertyChangedSignal("BackgroundColor3"):Connect(updateVisibility)
+refreshCards()
+gears:GetPropertyChangedSignal("BackgroundColor3"):Connect(refreshCards)
 if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
-    gears:GetPropertyChangedSignal("ImageColor3"):Connect(updateVisibility)
+    gears:GetPropertyChangedSignal("ImageColor3"):Connect(refreshCards)
 end
 
 --====================================================================
---  RESET / TRADE-OPEN VISUALS  (no executor, just visibility)
+--  RESET / TRADE-OPEN VISUALS
 --====================================================================
 
 local function resetPanels()
     for _, panel in ipairs(adminPanels) do
-        if panel and panel.Parent then
-            if not removedPresets[panel] then
-                panel.Visible = true
-                panel:SetAttribute("Clicked", false)
-                local spacer = panel:FindFirstChild("Spacer")
-                if spacer then
-                    spacer.BackgroundColor3 = defaultColor
-                    local stroke = spacer:FindFirstChildOfClass("UIStroke")
-                    if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
-                end
-            else
-                panel.Visible = false
+        if panel and panel.Parent and not removedPresets[panel] then
+            panel:SetAttribute("Clicked", false)
+            local spacer = panel:FindFirstChild("Spacer")
+            if spacer then
+                spacer.BackgroundColor3 = defaultColor
+                local stroke = spacer:FindFirstChildOfClass("UIStroke")
+                if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
             end
         end
     end
+    refreshCards()
 end
 
 main:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -315,22 +224,60 @@ main:GetPropertyChangedSignal("Visible"):Connect(function()
 end)
 
 --====================================================================
---  SPAWNED ITEM PANELS  (appear directly below the Gamepasses label)
+--  ACCEPT-STAGE BEHAVIOUR  (visual only -- reads the button's .Text,
+--  never fires/clicks it, never touches the server or other player)
+--====================================================================
+
+local function getReadyText()
+    local other = main:FindFirstChild("Other")
+    if not other then return nil end
+    local readyButton = other:FindFirstChild("ReadyButton")
+    if not readyButton then return nil end
+    local txt = readyButton:FindFirstChild("Txt")
+    if not txt then return nil end
+    return txt.Text
+end
+
+local function resetCardsToDefault()
+    for _, panel in ipairs(adminPanels) do
+        if panel and panel.Parent then
+            panel:SetAttribute("Clicked", false)
+            local spacer = panel:FindFirstChild("Spacer")
+            if spacer then
+                spacer.BackgroundColor3 = defaultColor
+                local stroke = spacer:FindFirstChildOfClass("UIStroke")
+                if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        if getReadyText() == "ACCEPT" then
+            if not acceptLocked then
+                acceptLocked = true        -- blocks card clicks (see guard below)
+                resetCardsToDefault()      -- cards go back to default colour
+            end
+        else
+            acceptLocked = false           -- interactive again before ACCEPT
+        end
+        task.wait(0.05)
+    end
+end)
+
+--====================================================================
+--  SPAWNED ITEM PANELS
 --====================================================================
 
 local function createAdminPanel(preset)
     local clone = template:Clone()
     clone.Name = "AdminPanel"
     clone.Parent = scrollingFrame
-    clone.Visible = true
 
-    -- place this item right below the Gamepasses label
     spawnCount += 1
-    if gamepassLabel then
-        clone.LayoutOrder = gamepassLabel.LayoutOrder + spawnCount
-    else
-        clone.LayoutOrder = 100000 + spawnCount
-    end
+    clone.LayoutOrder = spawnCount
+    clone.Visible = gearsIsColour(SHOW_COLOR)   -- only when gears is green
 
     local spacer = clone:WaitForChild("Spacer")
     local cash   = spacer:WaitForChild("Cash")
@@ -375,12 +322,13 @@ local function createAdminPanel(preset)
     end)
 
     table.insert(adminPanels, clone)
+    refreshCards()
 end
 
 local function getVisibleCount(name)
     local count = 0
     for _, v in ipairs(adminPanels) do
-        if v and v.Parent and v.Visible and v:GetAttribute("PresetName") == name then
+        if v and v.Parent and not removedPresets[v] and v:GetAttribute("PresetName") == name then
             count += 1
         end
     end
@@ -390,63 +338,14 @@ end
 local function removePreset(name)
     for i = #adminPanels, 1, -1 do
         local panel = adminPanels[i]
-        if panel and panel.Parent and panel:GetAttribute("PresetName") == name and panel.Visible then
-            panel.Visible = false
+        if panel and panel.Parent and panel:GetAttribute("PresetName") == name and not removedPresets[panel] then
             removedPresets[panel] = true
+            panel.Visible = false
             showNotification('Removed "'..name..'" preset!', Color3.fromRGB(255,0,0))
             break
         end
     end
 end
-
---====================================================================
---  ACCEPT-STAGE BEHAVIOUR  (visual only -- reads the button's .Text,
---  never fires/clicks it, never touches the server or other player)
---    * when the ready button text becomes "ACCEPT":
---        - every inserted card returns to its DEFAULT colour
---        - cards stop responding to clicks (acceptLocked guard above)
---    * when it leaves "ACCEPT", cards become interactive again
---====================================================================
-
--- read-only: what does the trade's ready button currently say?
-local function getReadyText()
-    local other = main:FindFirstChild("Other")
-    if not other then return nil end
-    local readyButton = other:FindFirstChild("ReadyButton")
-    if not readyButton then return nil end
-    local txt = readyButton:FindFirstChild("Txt")
-    if not txt then return nil end
-    return txt.Text
-end
-
--- reset every inserted card to its default look
-local function resetCardsToDefault()
-    for _, panel in ipairs(adminPanels) do
-        if panel and panel.Parent then
-            panel:SetAttribute("Clicked", false)
-            local spacer = panel:FindFirstChild("Spacer")
-            if spacer then
-                spacer.BackgroundColor3 = defaultColor
-                local stroke = spacer:FindFirstChildOfClass("UIStroke")
-                if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
-            end
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        if getReadyText() == "ACCEPT" then
-            if not acceptLocked then
-                acceptLocked = true        -- blocks card clicks (see guard above)
-                resetCardsToDefault()      -- cards go back to default colour
-            end
-        else
-            acceptLocked = false           -- interactive again before ACCEPT
-        end
-        task.wait(0.05)
-    end
-end)
 
 --// CONFIRMATION BUTTONS
 description.Text = "This is a test for local scripts and anything you add will not be visible for anyone else"
@@ -644,7 +543,7 @@ for _, preset in ipairs(presets) do
 end
 
 --====================================================================
---  DEBUG SLIDER  ->  adjusts label text size live
+--  DEBUG SLIDER  ->  adjusts the "Gears + Gamepasses" button text size
 --====================================================================
 
 local sizeLabel = Instance.new("TextLabel")
@@ -655,7 +554,7 @@ sizeLabel.Font = Enum.Font.GothamBold
 sizeLabel.TextSize = 13
 sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
 sizeLabel.TextColor3 = Color3.new(1,1,1)
-sizeLabel.Text = "Label Text Size: " .. labelTextSize
+sizeLabel.Text = "Gears Txt Size: " .. gearsTxtSize
 sizeLabel.Parent = frame
 neonText(sizeLabel)
 
@@ -686,18 +585,18 @@ local function refreshSlider(rel)
     rel = math.clamp(rel, 0, 1)
     knob.Position = UDim2.new(rel, 0, 0.5, 0)
     sliderFill.Size = UDim2.new(rel, 0, 1, 0)
-    sizeLabel.Text = "Label Text Size: " .. labelTextSize
+    sizeLabel.Text = "Gears Txt Size: " .. gearsTxtSize
 end
 
--- initial knob position from default size
-refreshSlider((labelTextSize - MIN_TEXT_SIZE) / (MAX_TEXT_SIZE - MIN_TEXT_SIZE))
+-- initial knob position from current size (does not change the text until dragged)
+refreshSlider((gearsTxtSize - MIN_TEXT_SIZE) / (MAX_TEXT_SIZE - MIN_TEXT_SIZE))
 
 local sliderDragging = false
 local function setFromX(x)
     local rel = math.clamp((x - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
-    labelTextSize = math.floor(MIN_TEXT_SIZE + rel * (MAX_TEXT_SIZE - MIN_TEXT_SIZE) + 0.5)
+    gearsTxtSize = math.floor(MIN_TEXT_SIZE + rel * (MAX_TEXT_SIZE - MIN_TEXT_SIZE) + 0.5)
     refreshSlider(rel)
-    applyTextSize()
+    applyGearsTxtSize()
 end
 
 knob.InputBegan:Connect(function(input)
@@ -711,7 +610,7 @@ sliderTrack.InputBegan:Connect(function(input)
 end)
 
 --====================================================================
---  MINIMIZE / SHOW-HIDE / DRAG  (no executor, no file saving)
+--  MINIMIZE / SHOW-HIDE / DRAG
 --====================================================================
 
 local minimized = false
