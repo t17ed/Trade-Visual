@@ -1,896 +1,147 @@
+--[[
+	TradeLiveTrade — Gears / Gamepasses section builder
+	---------------------------------------------------
+	Place this as a LocalScript. Good homes:
+	  • StarterPlayer > StarterPlayerScripts, or
+	  • directly inside the TradeLiveTrade ScreenGui.
+
+	What it does:
+	  1. Reads TradeLiveTrade > TradeLiveTrade > Side Buttons > Gears
+	  2. If its colour is RGB(81, 158, 86):
+	       a. Clones  TradeLiveTrade > TradeLiveTrade > Header > Txts > Txt1
+	          into    TradeLiveTrade > TradeLiveTrade > Your   > ScrollingFrame,
+	          forcing its text to an underlined "Gears".
+	       b. Finds any frame inside that ScrollingFrame whose name contains
+	          "Selection", and directly below it clones that Gears label again,
+	          this time reading "Gamepasses".
+--]]
+
+local Players = game:GetService("Players")
+
 --====================================================================
--- Gamepasses side button + Spawner  (LocalScript, Roblox Studio)
--- Place in: StarterPlayer > StarterPlayerScripts
---
--- Studio-only build (no executor functions). Auto-accept uses
--- VirtualInputManager, which works in Studio play-tests only.
---
--- Behaviour:
---   * The spawner menu is ALWAYS visible; press ] to toggle it on/off.
---   * Gamepasses starts UNSELECTED. Click it -> green, other side buttons
---     turn 64/86/97, and the spawner's created panels show.
---   * Clicking any other side button hides everything the spawner created.
+-- CONFIG
 --====================================================================
+local TARGET_COLOR       = Color3.fromRGB(81, 158, 86)
+local SELECTION_KEYWORD  = "selection"   -- matched case-insensitively in frame names
 
---// SERVICES
-local Players             = game:GetService("Players")
-local UIS                 = game:GetService("UserInputService")
-local RunService          = game:GetService("RunService")
-local TweenService        = game:GetService("TweenService")
-local Debris              = game:GetService("Debris")
-local GuiService          = game:GetService("GuiService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+--====================================================================
+-- LOCATE THE GUI
+--====================================================================
+local player        = Players.LocalPlayer
+local playerGui     = player:WaitForChild("PlayerGui")
 
-local player    = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local rootGui       = playerGui:WaitForChild("TradeLiveTrade")     -- ScreenGui
+local main          = rootGui:WaitForChild("TradeLiveTrade")       -- Frame
+local sideButtons   = main:WaitForChild("Side Buttons")
+local gears         = sideButtons:WaitForChild("Gears")
+local header        = main:WaitForChild("Header")
+local txts          = header:WaitForChild("Txts")
+local txt1          = txts:WaitForChild("Txt1")
+local yourFrame     = main:WaitForChild("Your")
+local scrollingFrame= yourFrame:WaitForChild("ScrollingFrame")
 
---// FIXED TWEEN SETTINGS (no slider)
-local HOVER_SCALE = 1.05
-local TWEEN_TIME  = 0.10
+local GEARS_LABEL_NAME     = "GearsLabel"
+local GAMEPASS_LABEL_NAME  = "GamepassesLabel"
 
---// COLORS
-local GREEN_COLOR   = Color3.fromRGB(81, 158, 86)   -- Gamepasses selected
-local SIBLING_COLOR = Color3.fromRGB(64, 86, 97)    -- other side buttons while selected
-
---// SHARED STATE
-local gamepassActive = false       -- is the Gamepasses tab selected
-local SpawnerAPI = nil             -- set by startSpawner; lets the button show/hide created panels
-local spawnerStarted = false
-local spawnerGui = nil
-
-local function colorsClose(a, b)
-	return math.abs(a.R - b.R) < 0.02 and math.abs(a.G - b.G) < 0.02 and math.abs(a.B - b.B) < 0.02
+--====================================================================
+-- HELPERS
+--====================================================================
+-- Compare two colours with a tiny tolerance (avoids float rounding issues).
+local function coloursMatch(a, b)
+	local tol = 0.5 / 255
+	return math.abs(a.R - b.R) <= tol
+		and math.abs(a.G - b.G) <= tol
+		and math.abs(a.B - b.B) <= tol
 end
 
--- Self-contained confirmation popup (neutral wording) --------------------------
-local function askConfirm(itemTitle, onYes, onNo)
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "GP_Confirm"
-	gui.ResetOnSpawn = false
-	gui.DisplayOrder = 1000001
-	gui.Parent = playerGui
-
-	local dim = Instance.new("TextButton")
-	dim.Text = ""
-	dim.AutoButtonColor = false
-	dim.Size = UDim2.new(1, 0, 1, 0)
-	dim.BackgroundColor3 = Color3.new(0, 0, 0)
-	dim.BackgroundTransparency = 0.5
-	dim.Parent = gui
-
-	local box = Instance.new("Frame")
-	box.Size = UDim2.new(0, 320, 0, 170)
-	box.Position = UDim2.new(0.5, -160, 0.5, -85)
-	box.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-	box.Parent = gui
-	do local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 12); cc.Parent = box end
-
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.new(0, 16, 0, 14)
-	title.Size = UDim2.new(1, -32, 0, 22)
-	title.Font = Enum.Font.GothamBlack
-	title.TextSize = 18
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Text = "Add item to trade"
-	title.Parent = box
-
-	local desc = Instance.new("TextLabel")
-	desc.BackgroundTransparency = 1
-	desc.Position = UDim2.new(0, 16, 0, 44)
-	desc.Size = UDim2.new(1, -32, 0, 70)
-	desc.Font = Enum.Font.Gotham
-	desc.TextSize = 14
-	desc.TextWrapped = true
-	desc.TextYAlignment = Enum.TextYAlignment.Top
-	desc.TextXAlignment = Enum.TextXAlignment.Left
-	desc.TextColor3 = Color3.fromRGB(210, 210, 210)
-	desc.Text = "Add " .. tostring(itemTitle) .. " to the trade?"
-	desc.Parent = box
-
-	local function mkBtn(txt, x, col)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(0, 140, 0, 36)
-		b.Position = UDim2.new(0, x, 1, -50)
-		b.BackgroundColor3 = col
-		b.Text = txt
-		b.Font = Enum.Font.GothamBold
-		b.TextSize = 15
-		b.TextColor3 = Color3.new(1, 1, 1)
-		b.Parent = box
-		local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 8); cc.Parent = b
-		return b
+-- Gears may be a Frame (BackgroundColor3) or an Image button (ImageColor3),
+-- so check whichever applies.
+local function gearsMatchesColour()
+	if coloursMatch(gears.BackgroundColor3, TARGET_COLOR) then
+		return true
 	end
-
-	local yes = mkBtn("Yes", 16, GREEN_COLOR)
-	local no  = mkBtn("No", 164, Color3.fromRGB(170, 60, 70))
-	local function close() if gui then gui:Destroy() end end
-	yes.MouseButton1Click:Connect(function() close(); if onYes then onYes() end end)
-	no.MouseButton1Click:Connect(function() close(); if onNo then onNo() end end)
-	dim.MouseButton1Click:Connect(function() close(); if onNo then onNo() end end)
-end
-
--- Studio-only press: simulates a real click on the local button. No effect in a live game.
-local function pressButton(btn)
-	if not btn or not btn:IsA("GuiObject") or not btn.Visible then return end
-	local inset = GuiService:GetGuiInset()
-	local center = btn.AbsolutePosition + btn.AbsoluteSize / 2
-	VirtualInputManager:SendMouseButtonEvent(center.X + inset.X, center.Y + inset.Y, 0, true, game, 0)
-	VirtualInputManager:SendMouseButtonEvent(center.X + inset.X, center.Y + inset.Y, 0, false, game, 0)
-end
-
-local function playSound(id, volume)
-	local s = Instance.new("Sound")
-	s.SoundId = id
-	s.Volume = volume or 1
-	s.Parent = playerGui
-	s:Play()
-	Debris:AddItem(s, 5)
-end
-
-local function neonText(obj)
-	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-		local old = obj:FindFirstChild("Glow")
-		if old then old:Destroy() end
-		local glow = Instance.new("UIStroke")
-		glow.Name = "Glow"
-		glow.Color = Color3.fromRGB(255, 20, 147)
-		glow.Thickness = 2
-		glow.Parent = obj
+	if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
+		return coloursMatch(gears.ImageColor3, TARGET_COLOR)
 	end
+	return false
 end
 
---====================================================================
--- SPAWNER (built once the trade UI exists; menu stays visible, ] toggles it)
---====================================================================
-local function startSpawner()
-	if spawnerStarted then return end
-	spawnerStarted = true
-
-	--// TRADE UI (your game's UI) -- essentials checked before yielding
-	local tradeRoot = playerGui:FindFirstChild("TradeLiveTrade")
-	local tradeUI = tradeRoot and tradeRoot:FindFirstChild("TradeLiveTrade")
-	local yourFrame = tradeUI and tradeUI:FindFirstChild("Your")
-	local scrollingFrame = yourFrame and yourFrame:FindFirstChild("ScrollingFrame")
-	if not scrollingFrame then warn("[Spawner] Your.ScrollingFrame not found; cannot start"); spawnerStarted = false; return end
-	local template = scrollingFrame:FindFirstChild("Template")
-	if template then template.Visible = false else warn("[Spawner] ScrollingFrame.Template not found; preset spawning disabled") end
-
-	--// ORIGINAL RICH-TEXT NOTIFICATIONS (uses your game's Notification UI)
-	local notificationCooldown = {}
-	local notificationRoot = playerGui:WaitForChild("Notification", 5)
-	local notificationUI   = notificationRoot and notificationRoot:WaitForChild("Notification", 5)
-	local notifTemplate    = notificationUI and notificationUI:WaitForChild("Template", 5)
-	if not notifTemplate then warn("[Spawner] Notification template not found; using a simple fallback") end
-
-	local fallbackGui
-	local function showNotification(text, color)
-		if notificationCooldown[text] then return end
-		notificationCooldown[text] = true
-		task.delay(0.15, function() notificationCooldown[text] = nil end)
-
-		if notifTemplate then
-			local clone = notifTemplate:Clone()
-			clone.Parent = notificationUI
-			clone.Visible = true
-			local txt = clone:IsA("TextLabel") and clone or clone:FindFirstChild("Text", true)
-			if txt then
-				txt.RichText = true
-				txt.Text = text
-				txt.TextColor3 = color
-			end
-			local originalPos = clone.Position
-			clone.Position = originalPos + UDim2.new(0, 300, 0, 0)
-			TweenService:Create(clone, TweenInfo.new(0.25, Enum.EasingStyle.Quint), { Position = originalPos }):Play()
-			task.delay(4, function()
-				if clone and clone.Parent then
-					TweenService:Create(clone, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
-					task.wait(0.2)
-					if clone then clone:Destroy() end
-				end
-			end)
-			return
-		end
-
-		-- fallback (RichText kept) if the game has no Notification template
-		if not (fallbackGui and fallbackGui.Parent) then
-			fallbackGui = Instance.new("ScreenGui")
-			fallbackGui.Name = "GP_Notifications"
-			fallbackGui.ResetOnSpawn = false
-			fallbackGui.DisplayOrder = 1000000
-			fallbackGui.Parent = playerGui
-			local list = Instance.new("UIListLayout")
-			list.Padding = UDim.new(0, 6)
-			list.VerticalAlignment = Enum.VerticalAlignment.Bottom
-			list.HorizontalAlignment = Enum.HorizontalAlignment.Right
-			list.Parent = fallbackGui
-			local pad = Instance.new("UIPadding")
-			pad.PaddingRight = UDim.new(0, 12); pad.PaddingBottom = UDim.new(0, 12); pad.Parent = fallbackGui
-		end
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.new(0, 270, 0, 34)
-		label.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-		label.TextColor3 = color or Color3.new(1, 1, 1)
-		label.Font = Enum.Font.GothamBold
-		label.TextSize = 14
+-- Force a Text object's content to an underlined word via RichText.
+local function setUnderlined(label, word)
+	if label:IsA("TextLabel") or label:IsA("TextButton") or label:IsA("TextBox") then
 		label.RichText = true
-		label.Text = text
-		label.Parent = fallbackGui
-		local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 8); cc.Parent = label
-		task.delay(4, function() if label then label:Destroy() end end)
+		label.Text = "<u>" .. word .. "</u>"
 	end
+end
 
-	--// COLORS
-	local defaultColor = Color3.fromRGB(35, 45, 50)
-	local clickedColor = Color3.fromRGB(15, 50, 15)
-	local neonPink   = Color3.fromRGB(255, 20, 147)
-	local neonPurple = Color3.fromRGB(180, 60, 255)
-	local darkPurple = Color3.fromRGB(28, 18, 40)
-	local panelDark  = Color3.fromRGB(18, 18, 24)
-	local softPink   = Color3.fromRGB(255, 120, 220)
-
-	--// STATE
-	local adminPanels = {}
-	local removedPresets = {}
-	local pendingPanel = nil
-	local autoAccept, manualAutoAccept, temporaryAutoAccept = false, false, false
-	local acceptSpeed = 25
-	local lastAccept, temporaryAcceptEnd = 0, 0
-	local acceptProcessed = false
-	local keybindListening = false
-	local keybind = Enum.KeyCode.F
-
-	local presets = {
-		{ Name = "Admin",      Image = "rbxassetid://139291316302932", Cash = "9,999",     Title = "[🎁] Admin Panel" },
-		{ Name = "VIP",        Image = "rbxassetid://89326624889199",  Cash = "499",       Title = "[🎁] VIP" },
-		{ Name = "Hammer",     Image = "rbxassetid://113735454516185", Cash = "1,499",     Title = "[🎁] Ban Hammer" },
-		{ Name = "Laser",      Image = "rbxassetid://127461267233201", Cash = "749",       Title = "[🎁] Laser Gun" },
-		{ Name = "Money",      Image = "rbxassetid://93863319650684",  Cash = "299",       Title = "[🎁] 2x Money" },
-		{ Name = "Witch",      Image = "rbxassetid://118466141203194", Cash = "499",       Title = "[🎁] Witch Broom" },
-		{ Name = "Lucky Base", Image = "rbxassetid://90829604470739",  Cash = "799",       Title = "[🎁] Pot of Gold Base" },
-		{ Name = "Bunny Base", Image = "rbxassetid://114643827804140", Cash = "999",       Title = "[🎁] Bunny Basket Base" },
-		{ Name = "Wings",      Image = "rbxassetid://119199032365694", Cash = "799",       Title = "[🎁] Cupids Wings" },
-		{ Name = "Blackhole",  Image = "rbxassetid://88520285647604",  Cash = "199",       Title = "[🎁] Blackhole Slap" },
-		{ Name = "Carpet",     Image = "rbxassetid://124807886192972", Cash = "375",       Title = "[🎁] Flying Carpet" },
-		{ Name = "Chain",      Image = "rbxassetid://70478645851404",  Cash = "4,670,000", Title = "[🎁] Spyder Chain" },
-	}
-
-	--// SHOW / HIDE everything the spawner created (driven by the Gamepasses tab)
-	local function setPanelsVisible(show)
-		for _, panel in ipairs(adminPanels) do
-			if panel and panel.Parent then
-				panel.Visible = show and not removedPresets[panel]
+-- Place `item` directly below `target` inside `parent`.
+local function placeBelow(parent, target, item)
+	local layout = parent:FindFirstChildWhichIsA("UIListLayout")
+	if layout then
+		-- Ordered layout: push everything after the target down one slot,
+		-- then drop the new item into the gap.
+		local targetOrder = target.LayoutOrder
+		for _, child in ipairs(parent:GetChildren()) do
+			if child ~= item and child:IsA("GuiObject") and child.LayoutOrder > targetOrder then
+				child.LayoutOrder += 1
 			end
 		end
+		item.LayoutOrder = targetOrder + 1
+	else
+		-- Manual layout: sit it just under the target.
+		local height = target.AbsoluteSize.Y
+		if height <= 0 then
+			height = target.Size.Y.Offset   -- fallback before the GUI has rendered
+		end
+		local tPos = target.Position
+		item.Position = UDim2.new(
+			tPos.X.Scale, tPos.X.Offset,
+			tPos.Y.Scale, tPos.Y.Offset + height + 4
+		)
 	end
-	SpawnerAPI = { setPanelsVisible = setPanelsVisible }
-
-	local function hideSelections()
-		for _, v in ipairs(scrollingFrame:GetChildren()) do
-			if v:IsA("GuiObject") and v.Name:find("Selection") then v.Visible = false end
-		end
-	end
-	scrollingFrame.ChildAdded:Connect(function() task.wait(); hideSelections() end)
-	task.spawn(function() while true do hideSelections(); task.wait(0.03) end end)
-
-	-- When the trade reopens, panels follow the current tab state
-	local function resetPanels()
-		for _, panel in ipairs(adminPanels) do
-			if panel and panel.Parent then
-				panel:SetAttribute("Clicked", false)
-				local spacer = panel:FindFirstChild("Spacer")
-				if spacer then
-					spacer.BackgroundColor3 = defaultColor
-					local s = spacer:FindFirstChildOfClass("UIStroke")
-					if s then s.Color = Color3.fromRGB(0, 0, 0) end
-				end
-				panel.Visible = gamepassActive and not removedPresets[panel]
-			end
-		end
-	end
-	if tradeUI then
-		tradeUI:GetPropertyChangedSignal("Visible"):Connect(function()
-			if tradeUI.Visible then acceptProcessed = false; resetPanels() end
-		end)
-	end
-
-	local function getAcceptState()
-		local other = tradeUI and tradeUI:FindFirstChild("Other")
-		local rb = other and other:FindFirstChild("ReadyButton")
-		local txt = rb and rb:FindFirstChild("Txt")
-		return txt ~= nil and txt.Text == "ACCEPT"
-	end
-
-	local function createAdminPanel(preset)
-		if not template then showNotification("No Template found in ScrollingFrame!", Color3.fromRGB(255, 0, 0)); return end
-		local clone = template:Clone()
-		clone.Name = "AdminPanel"
-		clone.Visible = true
-		clone.Parent = scrollingFrame
-		clone:SetAttribute("Clicked", false)
-		clone:SetAttribute("PresetName", preset.Name)
-
-		local spacer = clone:FindFirstChild("Spacer")
-		if spacer then
-			local cash = spacer:FindFirstChild("Cash")
-			local title = spacer:FindFirstChild("Title")
-			if cash then cash.Text = preset.Cash end
-			if title then title.Text = preset.Title end
-			spacer.BackgroundColor3 = defaultColor
-			local stroke = spacer:FindFirstChildOfClass("UIStroke")
-			if stroke then stroke.Color = Color3.fromRGB(0, 0, 0) end
-
-			local img = spacer:FindFirstChild("CustomImage")
-			if not img then
-				img = Instance.new("ImageLabel")
-				img.Name = "CustomImage"
-				img.BackgroundTransparency = 1
-				img.Size = UDim2.new(0.5, 0, 0.5, 0)
-				img.Position = UDim2.new(0.25, 0, 0.25, 0)
-				img.Parent = spacer
-			end
-			img.Image = preset.Image
-
-			spacer.InputBegan:Connect(function(input)
-				if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-				playSound("rbxassetid://75311202481026", 1)
-				if clone:GetAttribute("Clicked") then
-					clone:SetAttribute("Clicked", false)
-					spacer.BackgroundColor3 = defaultColor
-					if stroke then stroke.Color = Color3.fromRGB(0, 0, 0) end
-					showNotification('Removed "' .. preset.Title .. '" from trade!', Color3.fromRGB(255, 0, 0))
-					playSound("rbxassetid://126210834885859", 0.5)
-					return
-				end
-				if getAcceptState() then return end
-				pendingPanel = clone
-				askConfirm(preset.Title, function()
-					playSound("rbxassetid://83245966620103", 0.5)
-					if pendingPanel and pendingPanel.Parent then
-						local sp = pendingPanel:FindFirstChild("Spacer")
-						if sp then
-							sp.BackgroundColor3 = clickedColor
-							local st = sp:FindFirstChildOfClass("UIStroke")
-							if st then st.Color = Color3.fromRGB(15, 255, 15) end
-							pendingPanel:SetAttribute("Clicked", true)
-						end
-					end
-					showNotification("Successfully added item to trade!", Color3.fromRGB(0, 255, 0))
-				end, function()
-					playSound("rbxassetid://126210834885859", 0.5)
-					showNotification("Did not add item to trade.", Color3.fromRGB(255, 0, 0))
-				end)
-			end)
-		end
-		table.insert(adminPanels, clone)
-	end
-
-	local function getVisibleCount(name)
-		local count = 0
-		for _, v in ipairs(adminPanels) do
-			if v and v.Parent and v.Visible and v:GetAttribute("PresetName") == name then count += 1 end
-		end
-		return count
-	end
-
-	local function removePreset(name)
-		for i = #adminPanels, 1, -1 do
-			local panel = adminPanels[i]
-			if panel and panel.Parent and panel:GetAttribute("PresetName") == name and panel.Visible then
-				panel.Visible = false
-				removedPresets[panel] = true
-				showNotification('Removed "' .. name .. '" preset!', Color3.fromRGB(255, 0, 0))
-				break
-			end
-		end
-	end
-
-	----------------------------------------------------------------------
-	-- SPAWNER WINDOW (always visible; ] toggles it)
-	----------------------------------------------------------------------
-	spawnerGui = Instance.new("ScreenGui")
-	spawnerGui.Name = "SpawnerUI"
-	spawnerGui.ResetOnSpawn = false
-	spawnerGui.DisplayOrder = 999999
-	spawnerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	spawnerGui.Parent = playerGui
-	local gui = spawnerGui
-
-	local frame = Instance.new("Frame")
-	frame.Parent = gui
-	frame.BackgroundColor3 = panelDark
-	frame.BorderSizePixel = 0
-	frame.ClipsDescendants = true
-	frame.Size = UDim2.new(0, 0, 0, 0)
-	frame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	do local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 14); cc.Parent = frame end
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, darkPurple),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 20, 60)),
-	})
-	gradient.Parent = frame
-	local frameStroke = Instance.new("UIStroke")
-	frameStroke.Color = neonPink; frameStroke.Thickness = 2; frameStroke.Parent = frame
-	TweenService:Create(frame, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.new(0, 340, 0, 430), Position = UDim2.new(0.5, -170, 0.5, -215),
-	}):Play()
-
-	local topBar = Instance.new("Frame")
-	topBar.Parent = frame
-	topBar.Size = UDim2.new(1, 0, 0, 42)
-	topBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-	topBar.BorderSizePixel = 0
-	do
-		local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 14); cc.Parent = topBar
-		local st = Instance.new("UIStroke"); st.Color = neonPurple; st.Thickness = 1.5; st.Parent = topBar
-	end
-
-	local title = Instance.new("TextLabel")
-	title.Parent = topBar
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.new(0, 12, 0, 0)
-	title.Size = UDim2.new(1, -100, 1, 0)
-	title.Font = Enum.Font.GothamBlack
-	title.Text = "t17ed's Spawner"
-	title.TextColor3 = Color3.new(1, 1, 1)
-	title.TextSize = 20
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	neonText(title)
-
-	local minimize = Instance.new("TextButton")
-	minimize.Parent = topBar
-	minimize.Size = UDim2.new(0, 28, 0, 28)
-	minimize.Position = UDim2.new(1, -72, 0.5, -14)
-	minimize.Text = "-"; minimize.Font = Enum.Font.GothamBlack; minimize.TextSize = 22
-	minimize.TextColor3 = Color3.new(1, 1, 1); minimize.BackgroundColor3 = neonPurple
-	do local cc = Instance.new("UICorner"); cc.Parent = minimize end
-	neonText(minimize)
-
-	local closeButton = Instance.new("TextButton")
-	closeButton.Parent = topBar
-	closeButton.Size = UDim2.new(0, 28, 0, 28)
-	closeButton.Position = UDim2.new(1, -36, 0.5, -14)
-	closeButton.Text = "X"; closeButton.Font = Enum.Font.GothamBlack; closeButton.TextSize = 18
-	closeButton.TextColor3 = Color3.new(1, 1, 1); closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 100)
-	do local cc = Instance.new("UICorner"); cc.Parent = closeButton end
-	neonText(closeButton)
-	closeButton.MouseButton1Click:Connect(function() gui.Enabled = false end)
-
-	local buttonsHolder = Instance.new("Frame")
-	buttonsHolder.Parent = frame
-	buttonsHolder.BackgroundTransparency = 1
-	buttonsHolder.Position = UDim2.new(0, 10, 0, 55)
-	buttonsHolder.Size = UDim2.new(1, -20, 0, 300)
-	local grid = Instance.new("UIGridLayout")
-	grid.Parent = buttonsHolder
-	grid.CellSize = UDim2.new(0, 60, 0, 60)
-	grid.CellPadding = UDim2.new(0, 6, 0, 6)
-	grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	grid.VerticalAlignment = Enum.VerticalAlignment.Top
-	grid.SortOrder = Enum.SortOrder.LayoutOrder
-
-	for _, preset in ipairs(presets) do
-		local button = Instance.new("ImageButton")
-		button.Parent = buttonsHolder
-		button.Image = preset.Image
-		button.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-		button.BorderSizePixel = 0
-		button.ScaleType = Enum.ScaleType.Fit
-		do
-			local cc = Instance.new("UICorner"); cc.Parent = button
-			local st = Instance.new("UIStroke"); st.Color = neonPink; st.Thickness = 1.5; st.Parent = button
-		end
-		local label = Instance.new("TextLabel")
-		label.Parent = button
-		label.BackgroundTransparency = 1
-		label.Position = UDim2.new(0, 0, 1, -22)
-		label.Size = UDim2.new(1, 0, 0, 20)
-		label.Text = preset.Name; label.Font = Enum.Font.GothamBlack; label.TextSize = 12
-		label.TextColor3 = Color3.new(1, 1, 1)
-		neonText(label)
-		local counter = Instance.new("TextLabel")
-		counter.Parent = button
-		counter.AnchorPoint = Vector2.new(1, 0)
-		counter.Position = UDim2.new(1, -5, 0, 5)
-		counter.Size = UDim2.new(0, 24, 0, 24)
-		counter.BackgroundColor3 = neonPink; counter.BackgroundTransparency = 0.5
-		counter.Text = "0"; counter.Font = Enum.Font.GothamBlack; counter.TextSize = 13
-		counter.TextColor3 = Color3.new(1, 1, 1)
-		do
-			local cc = Instance.new("UICorner"); cc.Parent = counter
-			local st = Instance.new("UIStroke"); st.Color = neonPink; st.Thickness = 2; st.Parent = counter
-		end
-		neonText(counter)
-
-		button.MouseButton1Click:Connect(function() createAdminPanel(preset) end)
-		button.MouseButton2Click:Connect(function() removePreset(preset.Name) end)
-		RunService.Heartbeat:Connect(function() counter.Text = tostring(getVisibleCount(preset.Name)) end)
-	end
-
-	local autoText = Instance.new("TextLabel")
-	autoText.Parent = frame
-	autoText.BackgroundTransparency = 1
-	autoText.Position = UDim2.new(0.5, -70, 1, -165)
-	autoText.Size = UDim2.new(0, 140, 0, 24)
-	autoText.Text = "AUTO ACCEPT"; autoText.Font = Enum.Font.GothamBlack; autoText.TextSize = 15
-	autoText.TextColor3 = Color3.new(1, 1, 1)
-	neonText(autoText)
-
-	local toggleHolder = Instance.new("Frame")
-	toggleHolder.Parent = frame
-	toggleHolder.Position = UDim2.new(0.5, -29, 1, -138)
-	toggleHolder.Size = UDim2.new(0, 58, 0, 28)
-	toggleHolder.BackgroundColor3 = Color3.fromRGB(50, 20, 40)
-	do
-		local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(1, 0); cc.Parent = toggleHolder
-		local st = Instance.new("UIStroke"); st.Color = neonPink; st.Thickness = 2; st.Parent = toggleHolder
-	end
-	local toggleCircle = Instance.new("Frame")
-	toggleCircle.Parent = toggleHolder
-	toggleCircle.Size = UDim2.new(0, 22, 0, 22)
-	toggleCircle.Position = UDim2.new(0, 3, 0.5, -11)
-	toggleCircle.BackgroundColor3 = Color3.new(1, 1, 1)
-	do local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(1, 0); cc.Parent = toggleCircle end
-
-	local function updateToggle()
-		if autoAccept then
-			TweenService:Create(toggleCircle, TweenInfo.new(0.18, Enum.EasingStyle.Quint),
-				{ Position = UDim2.new(1, -25, 0.5, -11), BackgroundColor3 = neonPink }):Play()
-		else
-			TweenService:Create(toggleCircle, TweenInfo.new(0.18, Enum.EasingStyle.Quint),
-				{ Position = UDim2.new(0, 3, 0.5, -11), BackgroundColor3 = Color3.new(1, 1, 1) }):Play()
-		end
-	end
-	toggleHolder.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			manualAutoAccept = not manualAutoAccept
-			autoAccept = manualAutoAccept or temporaryAutoAccept
-			updateToggle()
-		end
-	end)
-
-	local speedBox = Instance.new("TextBox")
-	speedBox.Parent = frame
-	speedBox.Size = UDim2.new(0, 160, 0, 34)
-	speedBox.Position = UDim2.new(0.5, -80, 1, -92)
-	speedBox.BackgroundColor3 = Color3.fromRGB(45, 20, 40)
-	speedBox.TextColor3 = Color3.new(1, 1, 1)
-	speedBox.PlaceholderText = "25..."; speedBox.Text = "25..."
-	speedBox.Font = Enum.Font.GothamBold; speedBox.TextSize = 15
-	speedBox.ClearTextOnFocus = false
-	do local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 10); cc.Parent = speedBox end
-	neonText(speedBox)
-	speedBox.FocusLost:Connect(function()
-		local num = tonumber((speedBox.Text:gsub("%D", ""))) or 25
-		num = math.clamp(num, 25, 500)
-		acceptSpeed = num
-		speedBox.Text = tostring(num) .. "..."
-	end)
-
-	local keybindButton = Instance.new("TextButton")
-	keybindButton.Parent = frame
-	keybindButton.Size = UDim2.new(0, 34, 0, 34)
-	keybindButton.Position = UDim2.new(0.5, 90, 1, -92)
-	keybindButton.BackgroundColor3 = neonPink
-	keybindButton.Text = keybind.Name; keybindButton.Font = Enum.Font.GothamBlack; keybindButton.TextSize = 12
-	keybindButton.TextColor3 = Color3.new(1, 1, 1)
-	do local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(1, 0); cc.Parent = keybindButton end
-	neonText(keybindButton)
-	keybindButton.MouseButton1Click:Connect(function()
-		keybindListening = true
-		keybindButton.Text = "..."
-		showNotification("Press any key...", Color3.fromRGB(255, 255, 0))
-	end)
-
-	local website = Instance.new("TextButton")
-	website.Parent = frame
-	website.Size = UDim2.new(1, 0, 0, 24)
-	website.Position = UDim2.new(0, 0, 1, -28)
-	website.BackgroundTransparency = 1
-	website.Text = "t17ed.github.io"; website.Font = Enum.Font.GothamBlack; website.TextSize = 15
-	website.TextColor3 = softPink
-	neonText(website)
-	website.MouseButton1Click:Connect(function() showNotification("t17ed.github.io", Color3.fromRGB(255, 255, 0)) end)
-
-	local minimized = false
-	minimize.MouseButton1Click:Connect(function()
-		minimized = not minimized
-		minimize.Text = minimized and "+" or "-"
-		buttonsHolder.Visible = not minimized
-		toggleHolder.Visible = not minimized
-		autoText.Visible = not minimized
-		website.Visible = not minimized
-		speedBox.Visible = not minimized
-		keybindButton.Visible = not minimized
-		TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {
-			Size = minimized and UDim2.new(0, 340, 0, 45) or UDim2.new(0, 340, 0, 430),
-		}):Play()
-	end)
-
-	--// INPUTS: keybind capture, auto-accept hotkey, and ] menu toggle
-	UIS.InputBegan:Connect(function(input, gpe)
-		if gpe then return end
-		if keybindListening then
-			if input.KeyCode ~= Enum.KeyCode.Unknown then
-				keybindListening = false
-				keybind = input.KeyCode
-				keybindButton.Text = keybind.Name
-				showNotification("Keybind set to " .. keybind.Name, Color3.fromRGB(0, 255, 0))
-			end
-			return
-		end
-		if input.KeyCode == Enum.KeyCode.RightBracket then
-			gui.Enabled = not gui.Enabled
-		elseif input.KeyCode == keybind then
-			manualAutoAccept = not manualAutoAccept
-			autoAccept = manualAutoAccept or temporaryAutoAccept
-			updateToggle()
-		end
-	end)
-
-	--// DRAGGING
-	local dragging, dragStart, startPos = false, nil, nil
-	topBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true; dragStart = input.Position; startPos = frame.Position
-		end
-	end)
-	topBar.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-	end)
-	UIS.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStart
-			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		end
-	end)
-
-	--// AUTO ACCEPT (Studio-only press)
-	RunService.Heartbeat:Connect(function()
-		local other = tradeUI and tradeUI:FindFirstChild("Other")
-		if other then
-			local timer = other:FindFirstChild("Timer")
-			local ready = other:FindFirstChild("Ready")
-			local rbObj = other:FindFirstChild("ReadyButton")
-			local txt = rbObj and rbObj:FindFirstChild("Txt")
-			if timer and ready and txt and timer.Text == "⏰0.1s Left" and txt.Text == "ACCEPT" and ready.Visible then
-				if not temporaryAutoAccept then
-					temporaryAutoAccept = true
-					temporaryAcceptEnd = tick() + 5
-					autoAccept = true
-					updateToggle()
-				end
-			end
-		end
-		if temporaryAutoAccept and tick() >= temporaryAcceptEnd then
-			temporaryAutoAccept = false
-			autoAccept = manualAutoAccept
-			updateToggle()
-		end
-		if not autoAccept then return end
-		if other then
-			local ready = other:FindFirstChild("Ready")
-			local rbObj = other:FindFirstChild("ReadyButton")
-			local txt = rbObj and rbObj:FindFirstChild("Txt")
-			if ready and txt and ready.Visible and txt.Text == "ACCEPT" then
-				if tick() - lastAccept >= (1 / acceptSpeed) then
-					lastAccept = tick()
-					pressButton(rbObj)
-				end
-			end
-		end
-	end)
-
-	--// PROCESS ACCEPT (clean up panels once accepted)
-	local function processAccept()
-		local other = tradeUI and tradeUI:FindFirstChild("Other")
-		local rbObj = other and other:FindFirstChild("ReadyButton")
-		local txt = rbObj and rbObj:FindFirstChild("Txt")
-		if not txt then return end
-		if txt.Text == "ACCEPT" then
-			if acceptProcessed then return end
-			acceptProcessed = true
-			for _, panel in ipairs(adminPanels) do
-				if panel and panel.Parent and not panel:GetAttribute("Clicked") then panel.Visible = false end
-			end
-			for _, panel in ipairs(adminPanels) do
-				if panel and panel.Parent and panel:GetAttribute("Clicked") then
-					panel:SetAttribute("Clicked", false)
-					local spacer = panel:FindFirstChild("Spacer")
-					if spacer then
-						spacer.BackgroundColor3 = defaultColor
-						local stroke = spacer:FindFirstChildOfClass("UIStroke")
-						if stroke then stroke.Color = Color3.fromRGB(0, 0, 0) end
-					end
-				end
-			end
-		else
-			acceptProcessed = false
-		end
-	end
-	task.spawn(function() while true do pcall(processAccept); task.wait() end end)
 end
 
 --====================================================================
--- GAMEPASSES BUTTON MANAGER
+-- MAIN
 --====================================================================
-local function getInner()
-	local screen = playerGui:FindFirstChild("TradeLiveTrade")
-	return screen and screen:FindFirstChild("TradeLiveTrade")
-end
-
-local function placeClone(clone, sibling)
-	if clone.Parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
-		clone.LayoutOrder = sibling.LayoutOrder + 1
+local function build()
+	-- Only act when the Gears button is the target colour.
+	if not gearsMatchesColour() then
 		return
 	end
-	local stepY = sibling.AbsoluteSize.Y
-	if stepY <= 0 then stepY = sibling.Size.Y.Offset end
-	local p = sibling.Position
-	clone.Position = UDim2.new(p.X.Scale, p.X.Offset, p.Y.Scale, p.Y.Offset + stepY + 6)
-end
 
-local curInner, curSide, curGamepass, curOrigColor
-local siblingOrig = {}
-
--- Select (green) or deselect the Gamepasses tab. Never touches the spawner menu.
-local function setActive(state)
-	if not (curGamepass and curGamepass.Parent and curSide) then return end
-	gamepassActive = state
-	if state then
-		curGamepass.BackgroundColor3 = GREEN_COLOR
-		for _, c in ipairs(curSide:GetChildren()) do
-			if c ~= curGamepass and c:IsA("GuiObject") then
-				if siblingOrig[c] == nil then siblingOrig[c] = c.BackgroundColor3 end
-				c.BackgroundColor3 = SIBLING_COLOR
-			end
-		end
-		if not spawnerStarted then startSpawner() end
-		if SpawnerAPI then SpawnerAPI.setPanelsVisible(true) end
-	else
-		if curOrigColor then curGamepass.BackgroundColor3 = curOrigColor end
-		for c, orig in pairs(siblingOrig) do
-			if c and c.Parent then c.BackgroundColor3 = orig end
-		end
-		if SpawnerAPI then SpawnerAPI.setPanelsVisible(false) end
-	end
-end
-
-local function wireButton(gamepasses)
-	if gamepasses:GetAttribute("GP_Wired") then return end
-	gamepasses:SetAttribute("GP_Wired", true)
-
-	local uiScale = gamepasses:FindFirstChildOfClass("UIScale")
-	if not uiScale then
-		uiScale = Instance.new("UIScale")
-		uiScale.Scale = 1
-		uiScale.Parent = gamepasses
+	-- Don't build twice.
+	if scrollingFrame:FindFirstChild(GEARS_LABEL_NAME) then
+		return
 	end
 
-	local activeTween, hovering = nil, false
-	local function tweenScale(target, duration, onComplete)
-		if activeTween then activeTween:Cancel() end
-		local tw = TweenService:Create(uiScale, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = target })
-		activeTween = tw
-		if onComplete then
-			tw.Completed:Connect(function(stateEnum)
-				if stateEnum == Enum.PlaybackState.Completed then onComplete() end
-			end)
-		end
-		tw:Play()
-	end
+	-- 1) Clone Txt1 -> underlined "Gears" -> ScrollingFrame
+	local gearsLabel = txt1:Clone()
+	gearsLabel.Name = GEARS_LABEL_NAME
+	setUnderlined(gearsLabel, "Gears")
+	gearsLabel.Parent = scrollingFrame
 
-	gamepasses.MouseEnter:Connect(function() hovering = true; tweenScale(HOVER_SCALE, TWEEN_TIME) end)
-	gamepasses.MouseLeave:Connect(function() hovering = false; tweenScale(1, TWEEN_TIME) end)
-
-	local function onClick()
-		local half = math.max(TWEEN_TIME * 0.5, 0.03)
-		tweenScale(1, half, function() if hovering then tweenScale(HOVER_SCALE, half) end end)
-		setActive(not gamepassActive)
-	end
-
-	if gamepasses:IsA("GuiButton") then
-		gamepasses.MouseButton1Click:Connect(onClick)
-	else
-		gamepasses.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then onClick() end
-		end)
-	end
-end
-
--- Clicking any other side button deselects Gamepasses and hides created panels
-local function wireSiblings(sideButtons, gamepasses)
-	for _, c in ipairs(sideButtons:GetChildren()) do
-		if c ~= gamepasses and c:IsA("GuiObject") and not c:GetAttribute("GP_SibWired") then
-			c:SetAttribute("GP_SibWired", true)
-			c.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-					if gamepassActive then setActive(false) end
-				end
-			end)
+	-- 2) Below every frame whose name contains "Selection", clone the Gears
+	--    label but make it read "Gamepasses".
+	for _, child in ipairs(scrollingFrame:GetChildren()) do
+		if child:IsA("GuiObject")
+			and child ~= gearsLabel
+			and string.find(string.lower(child.Name), SELECTION_KEYWORD, 1, true)
+		then
+			local gamepassLabel = gearsLabel:Clone()
+			gamepassLabel.Name = GAMEPASS_LABEL_NAME
+			setUnderlined(gamepassLabel, "Gamepasses")
+			gamepassLabel.Parent = scrollingFrame
+			placeBelow(scrollingFrame, child, gamepassLabel)
 		end
 	end
 end
 
-local function ensureButton()
-	local inner = getInner()
-	if not inner then return end
-	local sideButtons = inner:FindFirstChild("Side Buttons")
-	local brainrots = sideButtons and sideButtons:FindFirstChild("Brainrots")
-	if not (sideButtons and brainrots) then return end
+-- Run now...
+build()
 
-	local created = false
-	local gamepasses = sideButtons:FindFirstChild("Gamepasses")
-	if not gamepasses then
-		gamepasses = brainrots:Clone()
-		gamepasses.Name = "Gamepasses"
-		gamepasses.Parent = sideButtons
-		placeClone(gamepasses, brainrots)
-		-- Make sure it does NOT start in the selected/green look (Brainrots may be the active tab)
-		local unselected = brainrots.BackgroundColor3
-		if colorsClose(unselected, GREEN_COLOR) then
-			for _, c in ipairs(sideButtons:GetChildren()) do
-				if c ~= gamepasses and c ~= brainrots and c:IsA("GuiObject") and not colorsClose(c.BackgroundColor3, GREEN_COLOR) then
-					unselected = c.BackgroundColor3
-					break
-				end
-			end
-		end
-		gamepasses.BackgroundColor3 = unselected
-		created = true
-	end
-	gamepasses.Visible = true
-
-	local txt = gamepasses:FindFirstChild("Txt")
-	if txt and (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) then
-		txt.Visible = true
-		txt.Text = "GPs"
-	end
-
-	curInner, curSide, curGamepass = inner, sideButtons, gamepasses
-	if created then
-		curOrigColor = gamepasses.BackgroundColor3
-	elseif curOrigColor == nil then
-		curOrigColor = gamepasses.BackgroundColor3
-	end
-
-	wireButton(gamepasses)
-	wireSiblings(sideButtons, gamepasses)
-
-	if not spawnerStarted then startSpawner() end
-
-	-- Restore the selected state instantly if it was active before a rebuild
-	if gamepassActive then setActive(true) end
+-- ...and re-run if the Gears button later turns the target colour.
+gears:GetPropertyChangedSignal("BackgroundColor3"):Connect(build)
+if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
+	gears:GetPropertyChangedSignal("ImageColor3"):Connect(build)
 end
-
-local function hookInner(inner)
-	if inner:GetAttribute("GP_Hooked") then return end
-	inner:SetAttribute("GP_Hooked", true)
-	ensureButton()
-	inner:GetPropertyChangedSignal("Visible"):Connect(ensureButton)
-	local side = inner:FindFirstChild("Side Buttons")
-	if side then
-		side.ChildRemoved:Connect(function(child)
-			if child.Name == "Gamepasses" then task.defer(ensureButton) end
-		end)
-	end
-	inner.DescendantAdded:Connect(function(d)
-		if d.Name == "Brainrots" or d.Name == "Side Buttons" then ensureButton() end
-	end)
-end
-
-local function hookScreen(screen)
-	local inner = screen:FindFirstChild("TradeLiveTrade")
-	if inner then hookInner(inner) end
-	screen.ChildAdded:Connect(function(c)
-		if c.Name == "TradeLiveTrade" then hookInner(c) end
-	end)
-end
-
-local existingScreen = playerGui:FindFirstChild("TradeLiveTrade")
-if existingScreen then hookScreen(existingScreen) end
-playerGui.ChildAdded:Connect(function(c)
-	if c.Name == "TradeLiveTrade" then hookScreen(c) end
-end)
