@@ -81,6 +81,7 @@ local removedPresets     = {}
 local pendingPanel       = nil
 local notificationCooldown = {}
 local spawnCount         = 0   -- ordering of spawned items under the Gamepasses label
+local acceptLocked       = false -- true once the ready button shows "ACCEPT"
 
 --// PRESETS (unchanged)
 local presets = {
@@ -356,6 +357,7 @@ local function createAdminPanel(preset)
     img.Image = preset.Image
 
     spacer.InputBegan:Connect(function(input)
+        if acceptLocked then return end          -- locked once trade hits ACCEPT
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             playSound("rbxassetid://75311202481026", 1)
             if clone:GetAttribute("Clicked") then
@@ -396,6 +398,55 @@ local function removePreset(name)
         end
     end
 end
+
+--====================================================================
+--  ACCEPT-STAGE BEHAVIOUR  (visual only -- reads the button's .Text,
+--  never fires/clicks it, never touches the server or other player)
+--    * when the ready button text becomes "ACCEPT":
+--        - every inserted card returns to its DEFAULT colour
+--        - cards stop responding to clicks (acceptLocked guard above)
+--    * when it leaves "ACCEPT", cards become interactive again
+--====================================================================
+
+-- read-only: what does the trade's ready button currently say?
+local function getReadyText()
+    local other = main:FindFirstChild("Other")
+    if not other then return nil end
+    local readyButton = other:FindFirstChild("ReadyButton")
+    if not readyButton then return nil end
+    local txt = readyButton:FindFirstChild("Txt")
+    if not txt then return nil end
+    return txt.Text
+end
+
+-- reset every inserted card to its default look
+local function resetCardsToDefault()
+    for _, panel in ipairs(adminPanels) do
+        if panel and panel.Parent then
+            panel:SetAttribute("Clicked", false)
+            local spacer = panel:FindFirstChild("Spacer")
+            if spacer then
+                spacer.BackgroundColor3 = defaultColor
+                local stroke = spacer:FindFirstChildOfClass("UIStroke")
+                if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        if getReadyText() == "ACCEPT" then
+            if not acceptLocked then
+                acceptLocked = true        -- blocks card clicks (see guard above)
+                resetCardsToDefault()      -- cards go back to default colour
+            end
+        else
+            acceptLocked = false           -- interactive again before ACCEPT
+        end
+        task.wait(0.05)
+    end
+end)
 
 --// CONFIRMATION BUTTONS
 description.Text = "This is a test for local scripts and anything you add will not be visible for anyone else"
