@@ -157,6 +157,7 @@ local presets = {
 	{
 		Name = "Chain",
 		Image = "rbxassetid://70478645851404",
+		Cash = "999,999",
 		Cash = "4,670,000",
 		Title = "[🎁] Spyder Chain"
 	},
@@ -204,28 +205,60 @@ description.Text =
 --// SETTINGS TEXT
 task.spawn(function()
 
+	local connected = false
+
 	while true do
 
 		pcall(function()
 
-			local sideButtons = tradeUI:FindFirstChild("Side Buttons")
+			local functionText = playerGui
+				:WaitForChild("Settings")
+				:WaitForChild("Settings")
+				:WaitForChild("Content")
+				:WaitForChild("ScrollingFrame")
+				:WaitForChild("VFX")
+				:WaitForChild("Function")
 
-			if sideButtons then
+			functionText.Text = "Gamepass Trading"
 
-				local gears = sideButtons:FindFirstChild("Gears")
+			if not connected then
 
-				if gears then
+				connected = true
 
-					local txt = gears:FindFirstChild("Txt")
+				functionText:GetPropertyChangedSignal("Text"):Connect(function()
 
-					if txt then
-						txt.Text = "Gears + Gamepasses"
+					if functionText.Text ~= "Gamepass Trading" then
+						functionText.Text = "Gamepass Trading"
 					end
-				end
+				end)
 			end
 		end)
 
-		task.wait(1)
+		task.wait()
+	end
+end)
+
+--// HIDE SELECTIONS
+local function hideSelections()
+
+	for _,v in ipairs(scrollingFrame:GetChildren()) do
+
+		if v.Name:find("Selection") and v:IsA("GuiObject") then
+			v.Visible = false
+		end
+	end
+end
+
+scrollingFrame.ChildAdded:Connect(function()
+	task.wait()
+	hideSelections()
+end)
+
+task.spawn(function()
+
+	while true do
+		hideSelections()
+		task.wait(0.03)
 	end
 end)
 
@@ -558,26 +591,6 @@ gui.ResetOnSpawn = false
 gui.DisplayOrder = 999999
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
-
-RunService.Heartbeat:Connect(function()
-
-	local sideButtons = tradeUI:FindFirstChild("Side Buttons")
-
-	if not sideButtons then
-		gui.Enabled = false
-		return
-	end
-
-	local gears = sideButtons:FindFirstChild("Gears")
-
-	if not gears then
-		gui.Enabled = false
-		return
-	end
-
-	gui.Enabled =
-		gears.BackgroundColor3 == Color3.fromRGB(81,158,86)
-end)
 
 --// FRAME
 local frame = Instance.new("Frame")
@@ -1181,22 +1194,6 @@ end
 
 --// HEARTBEAT
 RunService.Heartbeat:Connect(function()
-
-local sideButtons = tradeUI:FindFirstChild("Side Buttons")
-
-if not sideButtons then
-	return
-end
-
-local gears = sideButtons:FindFirstChild("Gears")
-
-if not gears then
-	return
-end
-
-if gears.BackgroundColor3 ~= Color3.fromRGB(81,158,86) then
-	return
-end
 
 	local other = tradeUI:FindFirstChild("Other")
 
