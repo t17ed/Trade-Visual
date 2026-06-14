@@ -204,6 +204,33 @@ description.Text =
 --// SETTINGS TEXT
 task.spawn(function()
 
+task.spawn(function()
+
+	while true do
+
+		pcall(function()
+
+			local sideButtons = tradeUI:FindFirstChild("Side Buttons")
+
+			if sideButtons then
+
+				local gears = sideButtons:FindFirstChild("Gears")
+
+				if gears then
+
+					local txt = gears:FindFirstChild("Txt")
+
+					if txt then
+						txt.Text = "Gears + Gamepasses"
+					end
+				end
+			end
+		end)
+
+		task.wait(1)
+	end
+end)
+
 	local connected = false
 
 	while true do
@@ -234,30 +261,6 @@ task.spawn(function()
 		end)
 
 		task.wait()
-	end
-end)
-
---// HIDE SELECTIONS
-local function hideSelections()
-
-	for _,v in ipairs(scrollingFrame:GetChildren()) do
-
-		if v.Name:find("Selection") and v:IsA("GuiObject") then
-			v.Visible = false
-		end
-	end
-end
-
-scrollingFrame.ChildAdded:Connect(function()
-	task.wait()
-	hideSelections()
-end)
-
-task.spawn(function()
-
-	while true do
-		hideSelections()
-		task.wait(0.03)
 	end
 end)
 
@@ -590,6 +593,26 @@ gui.ResetOnSpawn = false
 gui.DisplayOrder = 999999
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
+
+RunService.Heartbeat:Connect(function()
+
+	local sideButtons = tradeUI:FindFirstChild("Side Buttons")
+
+	if not sideButtons then
+		gui.Enabled = false
+		return
+	end
+
+	local gears = sideButtons:FindFirstChild("Gears")
+
+	if not gears then
+		gui.Enabled = false
+		return
+	end
+
+	gui.Enabled =
+		gears.BackgroundColor3 == Color3.fromRGB(81,158,86)
+end)
 
 --// FRAME
 local frame = Instance.new("Frame")
@@ -1193,6 +1216,22 @@ end
 
 --// HEARTBEAT
 RunService.Heartbeat:Connect(function()
+
+local sideButtons = tradeUI:FindFirstChild("Side Buttons")
+
+if not sideButtons then
+	return
+end
+
+local gears = sideButtons:FindFirstChild("Gears")
+
+if not gears then
+	return
+end
+
+if gears.BackgroundColor3 ~= Color3.fromRGB(81,158,86) then
+	return
+end
 
 	local other = tradeUI:FindFirstChild("Other")
 
