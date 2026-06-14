@@ -846,7 +846,7 @@ local function ensureButton()
 	local txt = gamepasses:FindFirstChild("Txt")
 	if txt and (txt:IsA("TextLabel") or txt:IsA("TextButton") or txt:IsA("TextBox")) then
 		txt.Visible = true
-		txt.Text = "Gamepasses"
+		txt.Text = "GPs"
 	end
 
 	curInner, curSide, curGamepass = inner, sideButtons, gamepasses
