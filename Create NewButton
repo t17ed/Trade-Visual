@@ -1,147 +1,746 @@
---[[
-	TradeLiveTrade — Gears / Gamepasses section builder
-	---------------------------------------------------
-	Place this as a LocalScript. Good homes:
-	  • StarterPlayer > StarterPlayerScripts, or
-	  • directly inside the TradeLiveTrade ScreenGui.
+--====================================================================
+--  VISUAL TRADE SPAWNER  --  LocalScript (client-side only)
+--====================================================================
+--  Put this in a LocalScript (e.g. StarterPlayer > StarterPlayerScripts).
+--
+--  This is PURELY VISUAL. It only edits GUI on the client running it.
+--  Nothing here is replicated to the server or to other players, so it
+--  cannot change another player's screen, trade, or inventory.
+--
+--  All executor-only functions from the old version were removed:
+--    * getconnections / firing other scripts' signals  -> GONE
+--    * :Activate() spoof-clicking the real trade button -> GONE
+--    * readfile / isfile / writefile (file saving)      -> GONE
+--    * setclipboard (website copy)                       -> GONE
+--    * the whole auto-accept system that read the OTHER  -> GONE
+--      player's ReadyButton / ACCEPT state
+--  None of those work in a normal LocalScript anyway.
+--====================================================================
 
-	What it does:
-	  1. Reads TradeLiveTrade > TradeLiveTrade > Side Buttons > Gears
-	  2. If its colour is RGB(81, 158, 86):
-	       a. Clones  TradeLiveTrade > TradeLiveTrade > Header > Txts > Txt1
-	          into    TradeLiveTrade > TradeLiveTrade > Your   > ScrollingFrame,
-	          forcing its text to an underlined "Gears".
-	       b. Finds any frame inside that ScrollingFrame whose name contains
-	          "Selection", and directly below it clones that Gears label again,
-	          this time reading "Gamepasses".
---]]
+--// SERVICES
+local Players          = game:GetService("Players")
+local UIS              = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
+local TweenService     = game:GetService("TweenService")
+local Debris           = game:GetService("Debris")
 
-local Players = game:GetService("Players")
+--// PLAYER
+local player    = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--// TRADE UI REFERENCES
+local rootGui        = playerGui:WaitForChild("TradeLiveTrade")
+local main           = rootGui:WaitForChild("TradeLiveTrade")
+local sideButtons    = main:WaitForChild("Side Buttons")
+local gears          = sideButtons:WaitForChild("Gears")
+local header         = main:WaitForChild("Header")
+local txts           = header:WaitForChild("Txts")
+local txt1           = txts:WaitForChild("Txt1")
+local yourFrame      = main:WaitForChild("Your")
+local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
+local template       = scrollingFrame:WaitForChild("Template")
+template.Visible = false
+
+--// CONFIRMATION UI
+local confirmationUI  = playerGui:WaitForChild("Confirmation")
+local warningTemplate = confirmationUI:WaitForChild("WarningTemplate")
+local content         = warningTemplate:WaitForChild("Content")
+local description     = content:WaitForChild("Description")
+local yesButton       = warningTemplate:WaitForChild("Yes")
+local noButton        = warningTemplate:WaitForChild("No")
+
+--// NOTIFICATION UI
+local notificationRoot = playerGui:WaitForChild("Notification")
+local notificationUI   = notificationRoot:WaitForChild("Notification")
+local notifTemplate    = notificationUI:WaitForChild("Template")
+
+--// CONFIG
+local SHOW_COLOR       = Color3.fromRGB(81, 158, 86)   -- gears green -> show labels
+local HIDE_COLOR       = Color3.fromRGB(64, 86, 97)    -- gears grey  -> hide labels
+local SELECTION_KEYWORD = "selection"
+local GEARS_LABEL_NAME    = "GearsLabel"
+local GAMEPASS_LABEL_NAME = "GamepassesLabel"
+
+--// LABEL TEXT SIZE (driven by the debug slider)
+local labelTextSize = 14          -- default (smaller than the original)
+local MIN_TEXT_SIZE = 8
+local MAX_TEXT_SIZE = 40
+
+--// PANEL COLORS
+local defaultColor = Color3.fromRGB(35,45,50)
+local clickedColor = Color3.fromRGB(15,50,15)
+local neonPink     = Color3.fromRGB(255,20,147)
+local neonPurple   = Color3.fromRGB(180,60,255)
+local darkPurple   = Color3.fromRGB(28,18,40)
+local panelDark    = Color3.fromRGB(18,18,24)
+local softPink     = Color3.fromRGB(255,120,220)
+
+--// TABLES
+local adminPanels        = {}
+local removedPresets     = {}
+local pendingPanel       = nil
+local notificationCooldown = {}
+local spawnCount         = 0   -- ordering of spawned items under the Gamepasses label
+
+--// PRESETS (unchanged)
+local presets = {
+    { Name = "Admin",      Image = "rbxassetid://139291316302932", Cash = "9,999 fake coins",     Title = "[🎁] Admin Panel" },
+    { Name = "VIP",        Image = "rbxassetid://89326624889199",  Cash = "499 fake coins",       Title = "[🎁] VIP" },
+    { Name = "Hammer",     Image = "rbxassetid://113735454516185", Cash = "1,499 fake coins",     Title = "[🎁] Ban Hammer" },
+    { Name = "Laser",      Image = "rbxassetid://127461267233201", Cash = "749 fake coins",       Title = "[🎁] Laser Gun" },
+    { Name = "Money",      Image = "rbxassetid://93863319650684",  Cash = "299 fake coins",       Title = "[🎁] 2x Money" },
+    { Name = "Witch",      Image = "rbxassetid://118466141203194", Cash = "499 fake coins",       Title = "[🎁] Witch Broom" },
+    { Name = "Lucky Base", Image = "rbxassetid://90829604470739",  Cash = "799 fake coins",       Title = "[🎁] Pot of Gold Base" },
+    { Name = "Bunny Base", Image = "rbxassetid://114643827804140", Cash = "999 fake coins",       Title = "[🎁] Bunny Basket Base" },
+    { Name = "Wings",      Image = "rbxassetid://119199032365694", Cash = "799 fake coins",       Title = "[🎁] Cupids Wings" },
+    { Name = "Blackhole",  Image = "rbxassetid://88520285647604",  Cash = "199 fake coins",       Title = "[🎁] Blackhole Slap" },
+    { Name = "Carpet",     Image = "rbxassetid://124807886192972", Cash = "375 fake coins",       Title = "[🎁] Flying Carpet" },
+    { Name = "Chain",      Image = "rbxassetid://70478645851404",  Cash = "4,670,000 fake coins", Title = "[🎁] Spyder Chain" },
+}
 
 --====================================================================
--- CONFIG
+--  HELPERS
 --====================================================================
-local TARGET_COLOR       = Color3.fromRGB(81, 158, 86)
-local SELECTION_KEYWORD  = "selection"   -- matched case-insensitively in frame names
+
+local function playSound(id, volume)
+    local sound = Instance.new("Sound")
+    sound.SoundId = id
+    sound.Volume = volume or 1
+    sound.Parent = playerGui
+    sound:Play()
+    Debris:AddItem(sound, 5)
+end
+
+local function neonText(obj)
+    if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+        local existing = obj:FindFirstChild("Glow")
+        if existing then existing:Destroy() end
+        local glow = Instance.new("UIStroke")
+        glow.Name = "Glow"
+        glow.Color = neonPink
+        glow.Thickness = 2
+        glow.Parent = obj
+    end
+end
+
+local function showNotification(text, color)
+    if notificationCooldown[text] then return end
+    notificationCooldown[text] = true
+    task.delay(0.15, function() notificationCooldown[text] = nil end)
+
+    local clone = notifTemplate:Clone()
+    clone.Parent = notificationUI
+    clone.Visible = true
+    local txt = clone:IsA("TextLabel") and clone or clone:FindFirstChild("Text", true)
+    if txt then
+        txt.RichText = true
+        txt.Text = text
+        txt.TextColor3 = color
+    end
+    local originalPos = clone.Position
+    clone.Position = originalPos + UDim2.new(0,300,0,0)
+    TweenService:Create(clone, TweenInfo.new(0.25, Enum.EasingStyle.Quint), { Position = originalPos }):Play()
+    task.delay(4, function()
+        if clone and clone.Parent then
+            TweenService:Create(clone, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+            task.wait(0.2)
+            if clone then clone:Destroy() end
+        end
+    end)
+end
+
+--// hide the real (empty) trade selection slots so only spawned items show
+local function hideSelections()
+    for _, v in ipairs(scrollingFrame:GetChildren()) do
+        if v:IsA("GuiObject") and v.Name:find("Selection") then
+            v.Visible = false
+        end
+    end
+end
+scrollingFrame.ChildAdded:Connect(function()
+    task.wait()
+    hideSelections()
+end)
+task.spawn(function()
+    while true do
+        hideSelections()
+        task.wait(0.03)
+    end
+end)
 
 --====================================================================
--- LOCATE THE GUI
+--  GEARS / GAMEPASSES LABELS  +  COLOR-GATED VISIBILITY
 --====================================================================
-local player        = Players.LocalPlayer
-local playerGui     = player:WaitForChild("PlayerGui")
 
-local rootGui       = playerGui:WaitForChild("TradeLiveTrade")     -- ScreenGui
-local main          = rootGui:WaitForChild("TradeLiveTrade")       -- Frame
-local sideButtons   = main:WaitForChild("Side Buttons")
-local gears         = sideButtons:WaitForChild("Gears")
-local header        = main:WaitForChild("Header")
-local txts          = header:WaitForChild("Txts")
-local txt1          = txts:WaitForChild("Txt1")
-local yourFrame     = main:WaitForChild("Your")
-local scrollingFrame= yourFrame:WaitForChild("ScrollingFrame")
+local gearsLabel    -- created on demand
+local gamepassLabel -- created on demand
 
-local GEARS_LABEL_NAME     = "GearsLabel"
-local GAMEPASS_LABEL_NAME  = "GamepassesLabel"
-
---====================================================================
--- HELPERS
---====================================================================
--- Compare two colours with a tiny tolerance (avoids float rounding issues).
 local function coloursMatch(a, b)
-	local tol = 0.5 / 255
-	return math.abs(a.R - b.R) <= tol
-		and math.abs(a.G - b.G) <= tol
-		and math.abs(a.B - b.B) <= tol
+    local tol = 0.5 / 255
+    return math.abs(a.R - b.R) <= tol
+        and math.abs(a.G - b.G) <= tol
+        and math.abs(a.B - b.B) <= tol
 end
 
--- Gears may be a Frame (BackgroundColor3) or an Image button (ImageColor3),
--- so check whichever applies.
-local function gearsMatchesColour()
-	if coloursMatch(gears.BackgroundColor3, TARGET_COLOR) then
-		return true
-	end
-	if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
-		return coloursMatch(gears.ImageColor3, TARGET_COLOR)
-	end
-	return false
+local function gearsIsColour(target)
+    if coloursMatch(gears.BackgroundColor3, target) then return true end
+    if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
+        return coloursMatch(gears.ImageColor3, target)
+    end
+    return false
 end
 
--- Force a Text object's content to an underlined word via RichText.
 local function setUnderlined(label, word)
-	if label:IsA("TextLabel") or label:IsA("TextButton") or label:IsA("TextBox") then
-		label.RichText = true
-		label.Text = "<u>" .. word .. "</u>"
-	end
+    if label:IsA("TextLabel") or label:IsA("TextButton") or label:IsA("TextBox") then
+        label.RichText = true
+        label.Text = "<u>" .. word .. "</u>"
+    end
 end
 
--- Place `item` directly below `target` inside `parent`.
+--// apply the current slider size to both labels
+local function applyTextSize()
+    for _, lbl in ipairs({ gearsLabel, gamepassLabel }) do
+        if lbl and lbl.Parent then
+            if lbl:IsA("TextLabel") or lbl:IsA("TextButton") or lbl:IsA("TextBox") then
+                lbl.TextScaled = false        -- so TextSize is respected
+                lbl.TextSize = labelTextSize
+            end
+        end
+    end
+end
+
 local function placeBelow(parent, target, item)
-	local layout = parent:FindFirstChildWhichIsA("UIListLayout")
-	if layout then
-		-- Ordered layout: push everything after the target down one slot,
-		-- then drop the new item into the gap.
-		local targetOrder = target.LayoutOrder
-		for _, child in ipairs(parent:GetChildren()) do
-			if child ~= item and child:IsA("GuiObject") and child.LayoutOrder > targetOrder then
-				child.LayoutOrder += 1
-			end
-		end
-		item.LayoutOrder = targetOrder + 1
-	else
-		-- Manual layout: sit it just under the target.
-		local height = target.AbsoluteSize.Y
-		if height <= 0 then
-			height = target.Size.Y.Offset   -- fallback before the GUI has rendered
-		end
-		local tPos = target.Position
-		item.Position = UDim2.new(
-			tPos.X.Scale, tPos.X.Offset,
-			tPos.Y.Scale, tPos.Y.Offset + height + 4
-		)
-	end
+    local layout = parent:FindFirstChildWhichIsA("UIListLayout")
+    if layout then
+        local targetOrder = target.LayoutOrder
+        for _, child in ipairs(parent:GetChildren()) do
+            if child ~= item and child:IsA("GuiObject") and child.LayoutOrder > targetOrder then
+                child.LayoutOrder += 1
+            end
+        end
+        item.LayoutOrder = targetOrder + 1
+    else
+        local height = target.AbsoluteSize.Y
+        if height <= 0 then height = target.Size.Y.Offset end
+        local tPos = target.Position
+        item.Position = UDim2.new(tPos.X.Scale, tPos.X.Offset, tPos.Y.Scale, tPos.Y.Offset + height + 4)
+    end
 end
 
---====================================================================
--- MAIN
---====================================================================
-local function build()
-	-- Only act when the Gears button is the target colour.
-	if not gearsMatchesColour() then
-		return
-	end
+local function buildLabels()
+    if not gearsIsColour(SHOW_COLOR) then return end
 
-	-- Don't build twice.
-	if scrollingFrame:FindFirstChild(GEARS_LABEL_NAME) then
-		return
-	end
+    -- Gears label: above EVERYTHING (very low LayoutOrder)
+    gearsLabel = scrollingFrame:FindFirstChild(GEARS_LABEL_NAME)
+    if not gearsLabel then
+        gearsLabel = txt1:Clone()
+        gearsLabel.Name = GEARS_LABEL_NAME
+        gearsLabel.LayoutOrder = -1000000
+        setUnderlined(gearsLabel, "Gears")
+        gearsLabel.Parent = scrollingFrame
+    end
 
-	-- 1) Clone Txt1 -> underlined "Gears" -> ScrollingFrame
-	local gearsLabel = txt1:Clone()
-	gearsLabel.Name = GEARS_LABEL_NAME
-	setUnderlined(gearsLabel, "Gears")
-	gearsLabel.Parent = scrollingFrame
+    -- Gamepasses label: below the trade's selection slot
+    gamepassLabel = scrollingFrame:FindFirstChild(GAMEPASS_LABEL_NAME)
+    if not gamepassLabel then
+        for _, child in ipairs(scrollingFrame:GetChildren()) do
+            if child:IsA("GuiObject")
+                and child ~= gearsLabel
+                and string.find(string.lower(child.Name), SELECTION_KEYWORD, 1, true)
+            then
+                gamepassLabel = gearsLabel:Clone()
+                gamepassLabel.Name = GAMEPASS_LABEL_NAME
+                setUnderlined(gamepassLabel, "Gamepasses")
+                gamepassLabel.Parent = scrollingFrame
+                placeBelow(scrollingFrame, child, gamepassLabel)
+                break
+            end
+        end
+    end
 
-	-- 2) Below every frame whose name contains "Selection", clone the Gears
-	--    label but make it read "Gamepasses".
-	for _, child in ipairs(scrollingFrame:GetChildren()) do
-		if child:IsA("GuiObject")
-			and child ~= gearsLabel
-			and string.find(string.lower(child.Name), SELECTION_KEYWORD, 1, true)
-		then
-			local gamepassLabel = gearsLabel:Clone()
-			gamepassLabel.Name = GAMEPASS_LABEL_NAME
-			setUnderlined(gamepassLabel, "Gamepasses")
-			gamepassLabel.Parent = scrollingFrame
-			placeBelow(scrollingFrame, child, gamepassLabel)
-		end
-	end
+    applyTextSize()
 end
 
--- Run now...
-build()
+--// show on green, hide on grey (64,86,97), otherwise leave as-is
+local function updateVisibility()
+    if gearsIsColour(HIDE_COLOR) then
+        if gearsLabel then gearsLabel.Visible = false end
+        if gamepassLabel then gamepassLabel.Visible = false end
+    elseif gearsIsColour(SHOW_COLOR) then
+        buildLabels()
+        if gearsLabel then gearsLabel.Visible = true end
+        if gamepassLabel then gamepassLabel.Visible = true end
+    end
+end
 
--- ...and re-run if the Gears button later turns the target colour.
-gears:GetPropertyChangedSignal("BackgroundColor3"):Connect(build)
+buildLabels()
+updateVisibility()
+gears:GetPropertyChangedSignal("BackgroundColor3"):Connect(updateVisibility)
 if gears:IsA("ImageLabel") or gears:IsA("ImageButton") then
-	gears:GetPropertyChangedSignal("ImageColor3"):Connect(build)
+    gears:GetPropertyChangedSignal("ImageColor3"):Connect(updateVisibility)
 end
+
+--====================================================================
+--  RESET / TRADE-OPEN VISUALS  (no executor, just visibility)
+--====================================================================
+
+local function resetPanels()
+    for _, panel in ipairs(adminPanels) do
+        if panel and panel.Parent then
+            if not removedPresets[panel] then
+                panel.Visible = true
+                panel:SetAttribute("Clicked", false)
+                local spacer = panel:FindFirstChild("Spacer")
+                if spacer then
+                    spacer.BackgroundColor3 = defaultColor
+                    local stroke = spacer:FindFirstChildOfClass("UIStroke")
+                    if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+                end
+            else
+                panel.Visible = false
+            end
+        end
+    end
+end
+
+main:GetPropertyChangedSignal("Visible"):Connect(function()
+    if main.Visible then
+        resetPanels()
+    else
+        if not warningTemplate.Visible then
+            confirmationUI.Enabled = false
+        end
+    end
+end)
+
+--====================================================================
+--  SPAWNED ITEM PANELS  (appear directly below the Gamepasses label)
+--====================================================================
+
+local function createAdminPanel(preset)
+    local clone = template:Clone()
+    clone.Name = "AdminPanel"
+    clone.Parent = scrollingFrame
+    clone.Visible = true
+
+    -- place this item right below the Gamepasses label
+    spawnCount += 1
+    if gamepassLabel then
+        clone.LayoutOrder = gamepassLabel.LayoutOrder + spawnCount
+    else
+        clone.LayoutOrder = 100000 + spawnCount
+    end
+
+    local spacer = clone:WaitForChild("Spacer")
+    local cash   = spacer:WaitForChild("Cash")
+    local title  = spacer:WaitForChild("Title")
+    local stroke = spacer:FindFirstChildOfClass("UIStroke")
+
+    cash.Text  = preset.Cash
+    title.Text = preset.Title
+    spacer.BackgroundColor3 = defaultColor
+    if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+
+    clone:SetAttribute("Clicked", false)
+    clone:SetAttribute("PresetName", preset.Name)
+
+    local img = spacer:FindFirstChild("CustomImage")
+    if not img then
+        img = Instance.new("ImageLabel")
+        img.Name = "CustomImage"
+        img.BackgroundTransparency = 1
+        img.Size = UDim2.new(0.5,0,0.5,0)
+        img.Position = UDim2.new(0.25,0,0.25,0)
+        img.Parent = spacer
+    end
+    img.Image = preset.Image
+
+    spacer.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            playSound("rbxassetid://75311202481026", 1)
+            if clone:GetAttribute("Clicked") then
+                clone:SetAttribute("Clicked", false)
+                spacer.BackgroundColor3 = defaultColor
+                if stroke then stroke.Color = Color3.fromRGB(0,0,0) end
+                showNotification('Removed "'..preset.Title..'" from trade!', Color3.fromRGB(255,0,0))
+                playSound("rbxassetid://126210834885859", 0.5)
+                return
+            end
+            pendingPanel = clone
+            confirmationUI.Enabled = true
+            warningTemplate.Visible = true
+        end
+    end)
+
+    table.insert(adminPanels, clone)
+end
+
+local function getVisibleCount(name)
+    local count = 0
+    for _, v in ipairs(adminPanels) do
+        if v and v.Parent and v.Visible and v:GetAttribute("PresetName") == name then
+            count += 1
+        end
+    end
+    return count
+end
+
+local function removePreset(name)
+    for i = #adminPanels, 1, -1 do
+        local panel = adminPanels[i]
+        if panel and panel.Parent and panel:GetAttribute("PresetName") == name and panel.Visible then
+            panel.Visible = false
+            removedPresets[panel] = true
+            showNotification('Removed "'..name..'" preset!', Color3.fromRGB(255,0,0))
+            break
+        end
+    end
+end
+
+--// CONFIRMATION BUTTONS
+description.Text = "This is a test for local scripts and anything you add will not be visible for anyone else"
+
+yesButton.MouseButton1Click:Connect(function()
+    warningTemplate.Visible = false
+    confirmationUI.Enabled = false
+    playSound("rbxassetid://83245966620103", 0.5)
+    if pendingPanel and pendingPanel.Parent then
+        local spacer = pendingPanel:FindFirstChild("Spacer")
+        if spacer then
+            local stroke = spacer:FindFirstChildOfClass("UIStroke")
+            spacer.BackgroundColor3 = clickedColor
+            if stroke then stroke.Color = Color3.fromRGB(15,255,15) end
+            pendingPanel:SetAttribute("Clicked", true)
+        end
+    end
+    showNotification("Successfully added item to trade!", Color3.fromRGB(0,255,0))
+end)
+
+noButton.MouseButton1Click:Connect(function()
+    warningTemplate.Visible = false
+    confirmationUI.Enabled = false
+    playSound("rbxassetid://126210834885859", 0.5)
+    showNotification("Failed to add item to trade!", Color3.fromRGB(255,0,0))
+end)
+
+--====================================================================
+--  SPAWNER CONTROL PANEL  (its own ScreenGui)
+--====================================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SpawnerUI"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,340,0,430)
+frame.Position = UDim2.new(0.5,-170,0.5,-215)
+frame.BackgroundColor3 = panelDark
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
+frame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0,14)
+corner.Parent = frame
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, darkPurple),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45,20,60)),
+})
+gradient.Parent = frame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Color = neonPink
+frameStroke.Thickness = 2
+frameStroke.Parent = frame
+
+-- open animation
+frame.Size = UDim2.new(0,0,0,0)
+frame.Position = UDim2.new(0.5,0,0.5,0)
+TweenService:Create(frame, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Size = UDim2.new(0,340,0,430),
+    Position = UDim2.new(0.5,-170,0.5,-215),
+}):Play()
+
+--// TOP BAR
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1,0,0,42)
+topBar.BackgroundColor3 = Color3.fromRGB(30,30,40)
+topBar.BorderSizePixel = 0
+topBar.Parent = frame
+
+local topStroke = Instance.new("UIStroke")
+topStroke.Color = neonPurple
+topStroke.Thickness = 1.5
+topStroke.Parent = topBar
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0,14)
+topCorner.Parent = topBar
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0,12,0,0)
+title.Size = UDim2.new(1,-100,1,0)
+title.Font = Enum.Font.GothamBlack
+title.Text = "Visual Spawner"
+title.TextColor3 = Color3.new(1,1,1)
+title.TextSize = 20
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = topBar
+neonText(title)
+
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.new(0,28,0,28)
+minimize.Position = UDim2.new(1,-72,0.5,-14)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBlack
+minimize.TextSize = 22
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.BackgroundColor3 = neonPurple
+minimize.Parent = topBar
+neonText(minimize)
+local minCorner = Instance.new("UICorner") minCorner.Parent = minimize
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0,28,0,28)
+closeButton.Position = UDim2.new(1,-36,0.5,-14)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.GothamBlack
+closeButton.TextSize = 18
+closeButton.TextColor3 = Color3.new(1,1,1)
+closeButton.BackgroundColor3 = Color3.fromRGB(255,50,100)
+closeButton.Parent = topBar
+neonText(closeButton)
+local closeCorner = Instance.new("UICorner") closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+    TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {
+        Size = UDim2.new(0,0,0,0),
+        Position = UDim2.new(0.5,0,0.5,0),
+    }):Play()
+    task.wait(0.25)
+    gui:Destroy()
+end)
+
+--// PRESET BUTTON GRID
+local buttonsHolder = Instance.new("Frame")
+buttonsHolder.BackgroundTransparency = 1
+buttonsHolder.Position = UDim2.new(0,10,0,55)
+buttonsHolder.Size = UDim2.new(1,-20,0,300)
+buttonsHolder.Parent = frame
+
+local grid = Instance.new("UIGridLayout")
+grid.CellSize = UDim2.new(0,60,0,60)
+grid.CellPadding = UDim2.new(0,6,0,6)
+grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+grid.VerticalAlignment = Enum.VerticalAlignment.Top
+grid.SortOrder = Enum.SortOrder.LayoutOrder
+grid.Parent = buttonsHolder
+
+for _, preset in ipairs(presets) do
+    local button = Instance.new("ImageButton")
+    button.Image = preset.Image
+    button.BackgroundColor3 = Color3.fromRGB(45,45,60)
+    button.BorderSizePixel = 0
+    button.ScaleType = Enum.ScaleType.Fit
+    button.Parent = buttonsHolder
+
+    local buttonCorner = Instance.new("UICorner") buttonCorner.Parent = button
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Color = neonPink
+    buttonStroke.Thickness = 1.5
+    buttonStroke.Parent = button
+
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0,0,1,-22)
+    label.Size = UDim2.new(1,0,0,20)
+    label.Text = preset.Name
+    label.Font = Enum.Font.GothamBlack
+    label.TextSize = 12
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Parent = button
+    neonText(label)
+
+    local counter = Instance.new("TextLabel")
+    counter.AnchorPoint = Vector2.new(1,0)
+    counter.Position = UDim2.new(1,-5,0,5)
+    counter.Size = UDim2.new(0,24,0,24)
+    counter.BackgroundColor3 = neonPink
+    counter.BackgroundTransparency = 0.5
+    counter.Text = "0"
+    counter.Font = Enum.Font.GothamBlack
+    counter.TextSize = 13
+    counter.TextColor3 = Color3.new(1,1,1)
+    counter.Parent = button
+    local counterCorner = Instance.new("UICorner") counterCorner.Parent = counter
+    local counterStroke = Instance.new("UIStroke")
+    counterStroke.Color = neonPink
+    counterStroke.Thickness = 2
+    counterStroke.Parent = counter
+    neonText(counter)
+
+    button.MouseButton1Click:Connect(function() createAdminPanel(preset) end)
+    button.MouseButton2Click:Connect(function() removePreset(preset.Name) end)
+    RunService.Heartbeat:Connect(function()
+        counter.Text = tostring(getVisibleCount(preset.Name))
+    end)
+end
+
+--====================================================================
+--  DEBUG SLIDER  ->  adjusts label text size live
+--====================================================================
+
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Position = UDim2.new(0,14,1,-72)
+sizeLabel.Size = UDim2.new(1,-28,0,18)
+sizeLabel.Font = Enum.Font.GothamBold
+sizeLabel.TextSize = 13
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+sizeLabel.TextColor3 = Color3.new(1,1,1)
+sizeLabel.Text = "Label Text Size: " .. labelTextSize
+sizeLabel.Parent = frame
+neonText(sizeLabel)
+
+local sliderTrack = Instance.new("Frame")
+sliderTrack.Position = UDim2.new(0,14,1,-50)
+sliderTrack.Size = UDim2.new(1,-28,0,10)
+sliderTrack.BackgroundColor3 = Color3.fromRGB(45,20,40)
+sliderTrack.Parent = frame
+local trackCorner = Instance.new("UICorner") trackCorner.CornerRadius = UDim.new(1,0) trackCorner.Parent = sliderTrack
+local trackStroke = Instance.new("UIStroke") trackStroke.Color = neonPink trackStroke.Thickness = 1.5 trackStroke.Parent = sliderTrack
+
+local sliderFill = Instance.new("Frame")
+sliderFill.BackgroundColor3 = neonPink
+sliderFill.BorderSizePixel = 0
+sliderFill.Size = UDim2.new(0,0,1,0)
+sliderFill.Parent = sliderTrack
+local fillCorner = Instance.new("UICorner") fillCorner.CornerRadius = UDim.new(1,0) fillCorner.Parent = sliderFill
+
+local knob = Instance.new("Frame")
+knob.AnchorPoint = Vector2.new(0.5,0.5)
+knob.Size = UDim2.new(0,16,0,16)
+knob.BackgroundColor3 = Color3.new(1,1,1)
+knob.Parent = sliderTrack
+local knobCorner = Instance.new("UICorner") knobCorner.CornerRadius = UDim.new(1,0) knobCorner.Parent = knob
+local knobStroke = Instance.new("UIStroke") knobStroke.Color = neonPink knobStroke.Thickness = 2 knobStroke.Parent = knob
+
+local function refreshSlider(rel)
+    rel = math.clamp(rel, 0, 1)
+    knob.Position = UDim2.new(rel, 0, 0.5, 0)
+    sliderFill.Size = UDim2.new(rel, 0, 1, 0)
+    sizeLabel.Text = "Label Text Size: " .. labelTextSize
+end
+
+-- initial knob position from default size
+refreshSlider((labelTextSize - MIN_TEXT_SIZE) / (MAX_TEXT_SIZE - MIN_TEXT_SIZE))
+
+local sliderDragging = false
+local function setFromX(x)
+    local rel = math.clamp((x - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
+    labelTextSize = math.floor(MIN_TEXT_SIZE + rel * (MAX_TEXT_SIZE - MIN_TEXT_SIZE) + 0.5)
+    refreshSlider(rel)
+    applyTextSize()
+end
+
+knob.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then sliderDragging = true end
+end)
+sliderTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderDragging = true
+        setFromX(input.Position.X)
+    end
+end)
+
+--====================================================================
+--  MINIMIZE / SHOW-HIDE / DRAG  (no executor, no file saving)
+--====================================================================
+
+local minimized = false
+minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        minimize.Text = "+"
+        buttonsHolder.Visible = false
+        sizeLabel.Visible = false
+        sliderTrack.Visible = false
+        TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint), { Size = UDim2.new(0,340,0,45) }):Play()
+    else
+        minimize.Text = "-"
+        buttonsHolder.Visible = true
+        sizeLabel.Visible = true
+        sliderTrack.Visible = true
+        TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint), { Size = UDim2.new(0,340,0,430) }):Play()
+    end
+end)
+
+-- Backquote ` toggles the whole panel on/off
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.Backquote then
+        gui.Enabled = not gui.Enabled
+    end
+end)
+
+-- Dragging the panel by its top bar
+local dragging = false
+local dragStart, startPos
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+topBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+UIS.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+        if sliderDragging then
+            setFromX(input.Position.X)
+        end
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then sliderDragging = false end
+end)
+
+--====================================================================
+--  OPTIONAL: rename a Settings label (purely cosmetic, client-side)
+--====================================================================
+task.spawn(function()
+    local connected = false
+    while true do
+        pcall(function()
+            local functionText = playerGui
+                :WaitForChild("Settings"):WaitForChild("Settings")
+                :WaitForChild("Content"):WaitForChild("ScrollingFrame")
+                :WaitForChild("VFX"):WaitForChild("Function")
+            functionText.Text = "Gamepass Trading"
+            if not connected then
+                connected = true
+                functionText:GetPropertyChangedSignal("Text"):Connect(function()
+                    if functionText.Text ~= "Gamepass Trading" then
+                        functionText.Text = "Gamepass Trading"
+                    end
+                end)
+            end
+        end)
+        task.wait()
+    end
+end)
