@@ -11,6 +11,11 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 --// TRADE UI
 local tradeUI = playerGui:WaitForChild("TradeLiveTrade"):WaitForChild("TradeLiveTrade")
+local gearsButton = tradeUI
+	:WaitForChild("Side Buttons")
+	:WaitForChild("Gears")
+
+local requiredColor = Color3.fromRGB(81,158,86)
 local yourFrame = tradeUI:WaitForChild("Your")
 local scrollingFrame = yourFrame:WaitForChild("ScrollingFrame")
 local template = scrollingFrame:WaitForChild("Template")
@@ -235,30 +240,6 @@ task.spawn(function()
 		end)
 
 		task.wait()
-	end
-end)
-
---// HIDE SELECTIONS
-local function hideSelections()
-
-	for _,v in ipairs(scrollingFrame:GetChildren()) do
-
-		if v.Name:find("Selection") and v:IsA("GuiObject") then
-			v.Visible = false
-		end
-	end
-end
-
-scrollingFrame.ChildAdded:Connect(function()
-	task.wait()
-	hideSelections()
-end)
-
-task.spawn(function()
-
-	while true do
-		hideSelections()
-		task.wait(0.03)
 	end
 end)
 
@@ -736,6 +717,14 @@ grid.CellPadding = UDim2.new(0,6,0,6)
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 grid.VerticalAlignment = Enum.VerticalAlignment.Top
 grid.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function updatePresetVisibility()
+	local enabled = gearsButton.BackgroundColor3 == requiredColor
+
+	if buttonsHolder then
+		buttonsHolder.Visible = enabled
+	end
+end
 
 --// PRESET BUTTONS
 for _,preset in ipairs(presets) do
