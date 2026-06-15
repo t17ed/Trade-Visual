@@ -162,7 +162,6 @@ local presets = {
 	{
 		Name = "Chain",
 		Image = "rbxassetid://70478645851404",
-		Cash = "999,999",
 		Cash = "4,670,000",
 		Title = "[🎁] Spyder Chain"
 	},
@@ -206,12 +205,6 @@ description.Text =
 --// REMOVED HOVER EFFECT COMPLETELY
 -- tweenHover(yesButton)
 -- tweenHover(noButton)
-
-local function updatePresetVisibility()
-	buttonsHolder.Visible = true
-end
-
-updatePresetVisibility()
 
 --// SETTINGS TEXT
 task.spawn(function()
@@ -716,6 +709,12 @@ buttonsHolder.Size = UDim2.new(1,-20,0,300)
 
 local grid = Instance.new("UIGridLayout")
 grid.Parent = buttonsHolder
+
+local function updatePresetVisibility()
+	buttonsHolder.Visible = true
+end
+
+updatePresetVisibility()
 
 grid.CellSize = UDim2.new(0,60,0,60)
 grid.CellPadding = UDim2.new(0,6,0,6)
