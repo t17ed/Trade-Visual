@@ -718,12 +718,17 @@ grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 grid.VerticalAlignment = Enum.VerticalAlignment.Top
 grid.SortOrder = Enum.SortOrder.LayoutOrder
 
-local function updatePresetVisibility()
-	local enabled = gearsButton.BackgroundColor3 == requiredColor
+updatePresetVisibility()
 
-	if buttonsHolder then
-		buttonsHolder.Visible = enabled
-	end
+gearsButton:GetPropertyChangedSignal("BackgroundColor3"):Connect(
+	updatePresetVisibility
+)
+
+local function updatePresetVisibility()
+	print("BG:", gearsButton.BackgroundColor3)
+
+	buttonsHolder.Visible =
+		gearsButton.BackgroundColor3 == Color3.fromRGB(81,158,86)
 end
 
 --// PRESET BUTTONS
