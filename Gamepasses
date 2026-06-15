@@ -725,11 +725,15 @@ gearsButton:GetPropertyChangedSignal("BackgroundColor3"):Connect(
 )
 
 local function updatePresetVisibility()
-	print("BG:", gearsButton.BackgroundColor3)
-
 	buttonsHolder.Visible =
-		gearsButton.BackgroundColor3 == Color3.fromRGB(81,158,86)
+		gearsButton.ImageColor3 == Color3.fromRGB(81,158,86)
 end
+
+updatePresetVisibility()
+
+gearsButton:GetPropertyChangedSignal("ImageColor3"):Connect(
+	updatePresetVisibility
+)
 
 --// PRESET BUTTONS
 for _,preset in ipairs(presets) do
@@ -1070,7 +1074,7 @@ minimize.MouseButton1Click:Connect(function()
 
 		minimize.Text = "-"
 
-		buttonsHolder.Visible = true
+		updatePresetVisibility()
 		toggleHolder.Visible = true
 		autoText.Visible = true
 		website.Visible = true
