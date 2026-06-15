@@ -207,6 +207,12 @@ description.Text =
 -- tweenHover(yesButton)
 -- tweenHover(noButton)
 
+local function updatePresetVisibility()
+	buttonsHolder.Visible = true
+end
+
+updatePresetVisibility()
+
 --// SETTINGS TEXT
 task.spawn(function()
 
@@ -717,12 +723,6 @@ grid.CellPadding = UDim2.new(0,6,0,6)
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 grid.VerticalAlignment = Enum.VerticalAlignment.Top
 grid.SortOrder = Enum.SortOrder.LayoutOrder
-
-updatePresetVisibility()
-
-local function updatePresetVisibility()
-	buttonsHolder.Visible = false
-end
 
 updatePresetVisibility()
 
