@@ -711,8 +711,13 @@ local grid = Instance.new("UIGridLayout")
 grid.Parent = buttonsHolder
 
 local function updatePresetVisibility()
-	buttonsHolder.Visible = true
+	buttonsHolder.Visible =
+		gearsButton.BackgroundColor3 == requiredColor
 end
+
+gearsButton:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
+	updatePresetVisibility()
+end)
 
 updatePresetVisibility()
 
