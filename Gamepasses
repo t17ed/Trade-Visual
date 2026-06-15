@@ -711,7 +711,7 @@ local grid = Instance.new("UIGridLayout")
 grid.Parent = buttonsHolder
 
 local function updatePresetVisibility()
-	buttonsHolder.Visible =
+	scrollingFrame.Visible =
 		gearsButton.BackgroundColor3 == requiredColor
 end
 
