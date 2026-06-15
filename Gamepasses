@@ -720,20 +720,11 @@ grid.SortOrder = Enum.SortOrder.LayoutOrder
 
 updatePresetVisibility()
 
-gearsButton:GetPropertyChangedSignal("BackgroundColor3"):Connect(
-	updatePresetVisibility
-)
-
 local function updatePresetVisibility()
-	buttonsHolder.Visible =
-		gearsButton.ImageColor3 == Color3.fromRGB(81,158,86)
+	buttonsHolder.Visible = false
 end
 
 updatePresetVisibility()
-
-gearsButton:GetPropertyChangedSignal("ImageColor3"):Connect(
-	updatePresetVisibility
-)
 
 --// PRESET BUTTONS
 for _,preset in ipairs(presets) do
